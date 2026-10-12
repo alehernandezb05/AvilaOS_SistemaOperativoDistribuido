@@ -1,6 +1,7 @@
 package edu.unimet.avilaos.estructuras;
 
 public class Cola<T> {
+
     private Nodo<T> frente;
     private Nodo<T> fin;
     private int tamano;
@@ -83,5 +84,42 @@ public class Cola<T> {
             actual = actual.getSiguiente();
         }
         return false;
+    }
+
+    // Reordena la cola segun el criterio dado. Si dos elementos empatan, conservan su orden de llegada
+    public void ordenar(Comparador<T> criterio) {
+        Nodo<T> pendiente = frente;
+        frente = null;
+        fin = null;
+        while (pendiente != null) {
+            Nodo<T> nodo = pendiente;
+            pendiente = pendiente.getSiguiente();
+            nodo.setSiguiente(null);
+            insertarNodoOrdenado(nodo, criterio);
+        }
+    }
+
+    private void insertarNodoOrdenado(Nodo<T> nodo, Comparador<T> criterio) {
+        if (frente == null) {
+            frente = nodo;
+            fin = nodo;
+            return;
+        }
+        // Va al frente solo si es estrictamente menor (asi los empates respetan el orden de llegada)
+        if (criterio.comparar(nodo.getDato(), frente.getDato()) < 0) {
+            nodo.setSiguiente(frente);
+            frente = nodo;
+            return;
+        }
+        Nodo<T> actual = frente;
+        while (actual.getSiguiente() != null
+                && criterio.comparar(actual.getSiguiente().getDato(), nodo.getDato()) <= 0) {
+            actual = actual.getSiguiente();
+        }
+        nodo.setSiguiente(actual.getSiguiente());
+        actual.setSiguiente(nodo);
+        if (nodo.getSiguiente() == null) {
+            fin = nodo;
+        }
     }
 }
