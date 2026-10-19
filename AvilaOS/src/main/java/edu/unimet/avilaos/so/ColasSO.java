@@ -76,11 +76,31 @@ public class ColasSO {
         }
     }
 
+    /** Devuelve el proceso nuevo en la posicion indicada, sin sacarlo (null si no existe). */
+    public PCB obtenerNuevo(int indice) {
+        mutex.acquireUninterruptibly();
+        try {
+            return nuevos.obtener(indice);
+        } finally {
+            mutex.release();
+        }
+    }
+
     /** Deja que la politica elija el siguiente proceso de la cola de listos. */
     public PCB seleccionarSiguiente(EstrategiaPlanificacion estrategia) {
         mutex.acquireUninterruptibly();
         try {
             return estrategia.seleccionarSiguiente(listos);
+        } finally {
+            mutex.release();
+        }
+    }
+
+    /** Pregunta a la politica si el proceso en CPU debe ser expulsado. */
+    public boolean debeExpropiar(EstrategiaPlanificacion estrategia, PCB enEjecucion, int ciclosEnCpu) {
+        mutex.acquireUninterruptibly();
+        try {
+            return estrategia.debeExpropiar(enEjecucion, listos, ciclosEnCpu);
         } finally {
             mutex.release();
         }
