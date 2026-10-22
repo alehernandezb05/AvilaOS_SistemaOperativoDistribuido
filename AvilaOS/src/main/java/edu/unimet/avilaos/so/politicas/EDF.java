@@ -1,6 +1,7 @@
 package edu.unimet.avilaos.so.politicas;
 
 import edu.unimet.avilaos.estructuras.Cola;
+import edu.unimet.avilaos.estructuras.Comparador;
 import edu.unimet.avilaos.so.EstrategiaPlanificacion;
 import edu.unimet.avilaos.so.PCB;
 import edu.unimet.avilaos.so.PoliticaPlanificacion;
@@ -12,6 +13,10 @@ import edu.unimet.avilaos.so.PoliticaPlanificacion;
  */
 public class EDF implements EstrategiaPlanificacion {
 
+    // Deadline mas cercano primero; los empates conservan el orden de llegada
+    private static final Comparador<PCB> POR_DEADLINE =
+            (a, b) -> Integer.compare(a.getDeadline(), b.getDeadline());
+
     @Override
     public PoliticaPlanificacion getPolitica() {
         return PoliticaPlanificacion.EDF;
@@ -19,7 +24,7 @@ public class EDF implements EstrategiaPlanificacion {
 
     /**
      * Evalúa si debe expropiar la CPU al proceso actual.
-     * Retorna true si hay en la cola de listos un proceso cuyo deadline sea menor
+     * Ordena la cola de listos y retorna true si el primero tiene un deadline menor
      * (más urgente) que el del proceso actualmente en ejecución.
      */
     @Override
@@ -28,18 +33,13 @@ public class EDF implements EstrategiaPlanificacion {
             return false;
         }
 
-        int tamano = colaListos.getTamano();
-        for (int i = 0; i < tamano; i++) {
-            PCB listo = colaListos.obtener(i);
-            if (listo != null && listo.getDeadline() < procesoEjecucion.getDeadline()) {
-                return true; // Existe un proceso más urgente en estado LISTO
-            }
-        }
-        return false;
+        colaListos.ordenar(POR_DEADLINE);
+        return colaListos.verFrente().getDeadline() < procesoEjecucion.getDeadline();
     }
 
     /**
-     * Busca el proceso con el deadline más cercano, lo saca de la cola y lo retorna.
+     * Ordena la cola de listos por deadline y saca el primero, de modo que la cola
+     * queda ordenada y visible para la GUI.
      */
     @Override
     public PCB seleccionarSiguiente(Cola<PCB> colaListos) {
@@ -47,18 +47,7 @@ public class EDF implements EstrategiaPlanificacion {
             return null;
         }
 
-        PCB masUrgente = colaListos.obtener(0);
-        int tamano = colaListos.getTamano();
-
-        for (int i = 1; i < tamano; i++) {
-            PCB actual = colaListos.obtener(i);
-            if (actual != null && actual.getDeadline() < masUrgente.getDeadline()) {
-                masUrgente = actual;
-            }
-        }
-
-        // Remueve explícitamente el proceso de la cola (cumple Regla 1)
-        colaListos.remover(masUrgente);
-        return masUrgente;
+        colaListos.ordenar(POR_DEADLINE);
+        return colaListos.desencolar();
     }
 }
