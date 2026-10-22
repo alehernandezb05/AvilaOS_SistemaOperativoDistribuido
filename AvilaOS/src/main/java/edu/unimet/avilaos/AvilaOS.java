@@ -4,6 +4,10 @@
 
 package edu.unimet.avilaos;
 
+import edu.unimet.avilaos.gui.VentanaPrincipal;
+import javax.swing.SwingUtilities;
+import javax.swing.UIManager;
+
 /**
  *
  * @author aleja
@@ -11,6 +15,13 @@ package edu.unimet.avilaos;
 public class AvilaOS {
 
     public static void main(String[] args) {
-        System.out.println("Hello World!");
+        SwingUtilities.invokeLater(() -> {
+            try {
+                UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
+            } catch (Exception e) {
+                // Si falla se queda el look and feel por defecto de Swing
+            }
+            new VentanaPrincipal(2).setVisible(true);
+        });
     }
 }
