@@ -1,6 +1,7 @@
 package edu.unimet.avilaos.so.politicas;
 
 import edu.unimet.avilaos.estructuras.Cola;
+import edu.unimet.avilaos.estructuras.Comparador;
 import edu.unimet.avilaos.so.EstrategiaPlanificacion;
 import edu.unimet.avilaos.so.PCB;
 import edu.unimet.avilaos.so.PoliticaPlanificacion;
@@ -11,6 +12,10 @@ import edu.unimet.avilaos.so.PoliticaPlanificacion;
  */
 public class PrioridadesApropiativas implements EstrategiaPlanificacion {
 
+    // Menor valor numerico primero; los empates conservan el orden de llegada
+    private static final Comparador<PCB> POR_PRIORIDAD =
+            (a, b) -> Integer.compare(a.getPrioridad(), b.getPrioridad());
+
     @Override
     public PoliticaPlanificacion getPolitica() {
         return PoliticaPlanificacion.PRIORIDADES_APROPIATIVAS;
@@ -18,7 +23,7 @@ public class PrioridadesApropiativas implements EstrategiaPlanificacion {
 
     /**
      * Evalúa si debe expropiar la CPU al proceso en ejecución.
-     * Retorna true si en la cola de listos existe algún proceso con mayor prioridad (menor valor numérico).
+     * Ordena la cola de listos y retorna true si el primero tiene mayor prioridad (menor valor numérico).
      */
     @Override
     public boolean debeExpropiar(PCB procesoEjecucion, Cola<PCB> colaListos, int ciclosEnEjecucion) {
@@ -26,18 +31,13 @@ public class PrioridadesApropiativas implements EstrategiaPlanificacion {
             return false;
         }
 
-        int tamano = colaListos.getTamano();
-        for (int i = 0; i < tamano; i++) {
-            PCB listo = colaListos.obtener(i);
-            if (listo != null && listo.getPrioridad() < procesoEjecucion.getPrioridad()) {
-                return true; // Existe un proceso en listos con mayor prioridad
-            }
-        }
-        return false;
+        colaListos.ordenar(POR_PRIORIDAD);
+        return colaListos.verFrente().getPrioridad() < procesoEjecucion.getPrioridad();
     }
 
     /**
-     * Busca el proceso con mayor prioridad en la cola de listos, lo remueve y lo devuelve.
+     * Ordena la cola de listos por prioridad y saca el primero, de modo que la cola
+     * queda ordenada y visible para la GUI.
      */
     @Override
     public PCB seleccionarSiguiente(Cola<PCB> colaListos) {
@@ -45,18 +45,7 @@ public class PrioridadesApropiativas implements EstrategiaPlanificacion {
             return null;
         }
 
-        PCB masPrioritario = colaListos.obtener(0);
-        int tamano = colaListos.getTamano();
-
-        for (int i = 1; i < tamano; i++) {
-            PCB actual = colaListos.obtener(i);
-            if (actual != null && actual.getPrioridad() < masPrioritario.getPrioridad()) {
-                masPrioritario = actual;
-            }
-        }
-
-        // Remueve el proceso seleccionado de la cola (cumple Regla 1)
-        colaListos.remover(masPrioritario);
-        return masPrioritario;
+        colaListos.ordenar(POR_PRIORIDAD);
+        return colaListos.desencolar();
     }
 }
