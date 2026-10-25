@@ -8,6 +8,7 @@ import edu.unimet.avilaos.so.PCB;
 import edu.unimet.avilaos.so.PoliticaPlanificacion;
 import java.awt.BorderLayout;
 import java.awt.GridLayout;
+import java.util.function.Consumer;
 import java.util.function.IntFunction;
 import java.util.function.IntSupplier;
 import javax.swing.BorderFactory;
@@ -39,6 +40,7 @@ public class PanelComputador extends JPanel {
     private final JComboBox<PoliticaPlanificacion> comboPolitica = new JComboBox<>(PoliticaPlanificacion.values());
     private final JTabbedPane pestanas = new JTabbedPane();
     private final ModeloTablaPCB[] modelos = new ModeloTablaPCB[NOMBRES_COLAS.length];
+    private boolean actualizando = false;
 
     public PanelComputador(Computador computador) {
         super(new BorderLayout(5, 5));
@@ -48,9 +50,16 @@ public class PanelComputador extends JPanel {
         add(crearPanelEstado(), BorderLayout.NORTH);
         add(crearPestanasColas(), BorderLayout.CENTER);
 
-        // Cambiar la politica desde aqui va con los controles (#38); por ahora solo la muestra
-        comboPolitica.setEnabled(false);
         actualizar();
+    }
+
+    /** Avisa cuando el usuario elige otra politica para este computador. */
+    public void alCambiarPolitica(Consumer<PoliticaPlanificacion> accion) {
+        comboPolitica.addActionListener(e -> {
+            if (!actualizando) {
+                accion.accept((PoliticaPlanificacion) comboPolitica.getSelectedItem());
+            }
+        });
     }
 
     private JPanel crearPanelEstado() {
@@ -119,7 +128,13 @@ public class PanelComputador extends JPanel {
         barraRam.setValue(ram.getUsada());
         barraRam.setString(ram.getUsada() + " / " + ram.getTotal() + " usados");
 
-        comboPolitica.setSelectedItem(computador.getNucleo().getEstrategia().getPolitica());
+        // Al refrescar el combo no debe avisar, o cada refresco volveria a cambiar la politica
+        PoliticaPlanificacion politica = computador.getNucleo().getEstrategia().getPolitica();
+        if (comboPolitica.getSelectedItem() != politica) {
+            actualizando = true;
+            comboPolitica.setSelectedItem(politica);
+            actualizando = false;
+        }
 
         ColasSO colas = computador.getNucleo().getColas();
         actualizarCola(0, colas::cantidadNuevos, colas::obtenerNuevo);

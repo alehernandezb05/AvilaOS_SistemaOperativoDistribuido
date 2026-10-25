@@ -30,12 +30,16 @@ public class VentanaPrincipal extends JFrame {
         setLayout(new BorderLayout());
 
         add(panelControles, BorderLayout.NORTH);
+        conectarControles();
 
         int cantidad = simulador.getCantidadComputadores();
         panelesComputador = new PanelComputador[cantidad];
         JPanel computadores = new JPanel(new GridLayout(1, cantidad, 5, 0));
         for (int i = 0; i < cantidad; i++) {
-            panelesComputador[i] = new PanelComputador(simulador.getComputador(i + 1));
+            int id = i + 1;
+            panelesComputador[i] = new PanelComputador(simulador.getComputador(id));
+            // Cada computador cambia su politica de forma independiente
+            panelesComputador[i].alCambiarPolitica(p -> simulador.cambiarPolitica(id, p));
             computadores.add(panelesComputador[i]);
         }
 
@@ -54,9 +58,19 @@ public class VentanaPrincipal extends JFrame {
         refresco.start();
     }
 
+    /** Los controles solo llaman al Simulador; no tienen logica propia. */
+    private void conectarControles() {
+        panelControles.setValores(simulador.getDuracionCicloMs(), simulador.getQuantum());
+        panelControles.alIniciar(e -> simulador.iniciar());
+        panelControles.alPausar(e -> simulador.pausar());
+        panelControles.alCambiarDuracionCiclo(simulador::setDuracionCicloMs);
+        panelControles.alCambiarQuantum(simulador::setQuantum);
+    }
+
     /** Lee el estado del simulador y repinta los paneles. */
     private void actualizar() {
         panelControles.setCiclo(simulador.getCicloActual());
+        panelControles.setCorriendo(simulador.estaCorriendo());
         for (PanelComputador panel : panelesComputador) {
             panel.actualizar();
         }
