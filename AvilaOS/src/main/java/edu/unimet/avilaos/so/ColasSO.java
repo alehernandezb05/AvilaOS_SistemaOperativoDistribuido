@@ -78,9 +78,18 @@ public class ColasSO {
 
     /** Devuelve el proceso nuevo en la posicion indicada, sin sacarlo (null si no existe). */
     public PCB obtenerNuevo(int indice) {
+        return obtener(nuevos, indice);
+    }
+
+    // Lecturas para la GUI: no sacan el proceso de su cola
+    public PCB obtenerListo(int indice) { return obtener(listos, indice); }
+    public PCB obtenerBloqueado(int indice) { return obtener(bloqueados, indice); }
+    public PCB obtenerTerminado(int indice) { return obtener(terminados, indice); }
+
+    private PCB obtener(Cola<PCB> cola, int indice) {
         mutex.acquireUninterruptibly();
         try {
-            return nuevos.obtener(indice);
+            return cola.obtener(indice);
         } finally {
             mutex.release();
         }
