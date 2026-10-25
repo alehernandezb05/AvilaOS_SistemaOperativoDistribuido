@@ -25,4 +25,10 @@ public class PanelLog extends JPanel {
                 + "[ciclo 14] Proceso P5 accede al buffer B2 de forma remota\n");
         add(new JScrollPane(areaLog), BorderLayout.CENTER);
     }
+
+    /** Agrega una linea al final del log y la deja visible. */
+    public void agregarLinea(String linea) {
+        areaLog.append(linea + "\n");
+        areaLog.setCaretPosition(areaLog.getDocument().getLength());
+    }
 }

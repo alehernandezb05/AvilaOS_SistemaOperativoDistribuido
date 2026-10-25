@@ -2,6 +2,7 @@ package edu.unimet.avilaos.gui;
 
 import java.awt.Dimension;
 import java.awt.FlowLayout;
+import java.awt.event.ActionListener;
 import javax.swing.BorderFactory;
 import javax.swing.JButton;
 import javax.swing.JLabel;
@@ -52,6 +53,11 @@ public class PanelControles extends JPanel {
         add(btnCargarConfig);
 
         btnPausar.setEnabled(false);
+    }
+
+    /** La ventana decide que hacer al pulsar "Crear proceso". */
+    public void alCrearProceso(ActionListener accion) {
+        btnCrearProceso.addActionListener(accion);
     }
 
     private JSeparator separador() {
