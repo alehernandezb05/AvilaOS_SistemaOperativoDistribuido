@@ -59,4 +59,8 @@ public class PanelControles extends JPanel {
         s.setPreferredSize(new Dimension(2, 24));
         return s;
     }
+
+    public void setCiclo(long ciclo) {
+        lblCiclo.setText("Ciclo: " + ciclo);
+    }
 }
