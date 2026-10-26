@@ -3,6 +3,7 @@ package edu.unimet.avilaos.gui;
 import edu.unimet.avilaos.cluster.Simulador;
 import edu.unimet.avilaos.so.PCB;
 import java.awt.BorderLayout;
+import java.awt.Dimension;
 import java.awt.GridLayout;
 import javax.swing.JFrame;
 import javax.swing.JPanel;
@@ -17,6 +18,8 @@ import javax.swing.Timer;
 public class VentanaPrincipal extends JFrame {
 
     public static final int REFRESCO_MS = 150;
+    public static final int COLUMNAS_COMPUTADORES = 2;
+    public static final int ALTO_PANEL_COMPUTADOR = 380;
 
     private final Simulador simulador;
     private final PanelControles panelControles = new PanelControles();
@@ -36,10 +39,12 @@ public class VentanaPrincipal extends JFrame {
 
         int cantidad = simulador.getCantidadComputadores();
         panelesComputador = new PanelComputador[cantidad];
-        JPanel computadores = new JPanel(new GridLayout(1, cantidad, 5, 0));
+        // Dos computadores por fila; si no caben en la ventana aparece el scroll vertical
+        JPanel computadores = new JPanel(new GridLayout(0, COLUMNAS_COMPUTADORES, 5, 5));
         for (int i = 0; i < cantidad; i++) {
             int id = i + 1;
             panelesComputador[i] = new PanelComputador(simulador.getComputador(id));
+            panelesComputador[i].setPreferredSize(new Dimension(300, ALTO_PANEL_COMPUTADOR));
             // Cada computador cambia su politica de forma independiente
             panelesComputador[i].alCambiarPolitica(p -> simulador.cambiarPolitica(id, p));
             computadores.add(panelesComputador[i]);
@@ -53,7 +58,9 @@ public class VentanaPrincipal extends JFrame {
         JSplitPane inferior = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, new PanelBuffers(), inferiorDerecha);
         inferior.setResizeWeight(0.4);
 
-        JSplitPane principal = new JSplitPane(JSplitPane.VERTICAL_SPLIT, new JScrollPane(computadores), inferior);
+        JScrollPane scrollComputadores = new JScrollPane(computadores);
+        scrollComputadores.getVerticalScrollBar().setUnitIncrement(16);
+        JSplitPane principal = new JSplitPane(JSplitPane.VERTICAL_SPLIT, scrollComputadores, inferior);
         principal.setResizeWeight(0.6);
         add(principal, BorderLayout.CENTER);
 
