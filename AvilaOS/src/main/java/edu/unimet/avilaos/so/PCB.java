@@ -2,7 +2,6 @@ package edu.unimet.avilaos.so;
 
 public class PCB {
 
-    // Contador compartido por todos los computadores: garantiza IDs unicos en todo el sistema
     private static int contadorIds = 0;
 
     private static synchronized int siguienteId() {
@@ -20,15 +19,22 @@ public class PCB {
 
     private EstadoProceso estado;
     private MotivoBloqueo motivoBloqueo;
-    private int deadline;          // ciclos que le quedan antes de vencer
-    private int tiempoRestante;    // instrucciones que le faltan por ejecutar
+    private int deadline;          
+    private int tiempoRestante;    
     private int programCounter;
     private int mar;
 
-    // Datos para las metricas
     private long cicloCreacion;
     private long cicloFin;
     private int ciclosBloqueado;
+
+    private int ciclosParaES;      
+    private int duracionES;        
+    private int contadorCiclosES;   
+
+    private String idBuffer;       
+    private int elementosTotales;   
+    private int elementosProcesados;
 
     public PCB(String nombre, int idComputador, TipoProceso tipo, int prioridad,
                int memoria, int totalInstrucciones, int deadline, long cicloCreacion) {
@@ -48,9 +54,15 @@ public class PCB {
         this.cicloCreacion = cicloCreacion;
         this.cicloFin = -1;
         this.ciclosBloqueado = 0;
+
+        this.ciclosParaES = 0;
+        this.duracionES = 0;
+        this.contadorCiclosES = 0;
+        this.idBuffer = null;
+        this.elementosTotales = 0;
+        this.elementosProcesados = 0;
     }
 
-    // Ejecuta una instruccion: PC y MAR suben una unidad y baja el tiempo restante
     public void ejecutarInstruccion() {
         programCounter++;
         mar++;
@@ -75,7 +87,6 @@ public class PCB {
         ciclosBloqueado++;
     }
 
-    // Getters
     public int getId() { return id; }
     public String getNombre() { return nombre; }
     public int getIdComputador() { return idComputador; }
@@ -93,7 +104,24 @@ public class PCB {
     public long getCicloFin() { return cicloFin; }
     public int getCiclosBloqueado() { return ciclosBloqueado; }
 
-    // Setters (solo de lo que cambia durante la simulacion)
+    public int getCiclosParaES() { return ciclosParaES; }
+    public void setCiclosParaES(int ciclosParaES) { this.ciclosParaES = ciclosParaES; }
+
+    public int getDuracionES() { return duracionES; }
+    public void setDuracionES(int duracionES) { this.duracionES = duracionES; }
+
+    public int getContadorCiclosES() { return contadorCiclosES; }
+    public void setContadorCiclosES(int contadorCiclosES) { this.contadorCiclosES = contadorCiclosES; }
+
+    public String getIdBuffer() { return idBuffer; }
+    public void setIdBuffer(String idBuffer) { this.idBuffer = idBuffer; }
+
+    public int getElementosTotales() { return elementosTotales; }
+    public void setElementosTotales(int elementosTotales) { this.elementosTotales = elementosTotales; }
+
+    public int getElementosProcesados() { return elementosProcesados; }
+    public void setElementosProcesados(int elementosProcesados) { this.elementosProcesados = elementosProcesados; }
+
     public void setEstado(EstadoProceso estado) { this.estado = estado; }
     public void setMotivoBloqueo(MotivoBloqueo motivo) { this.motivoBloqueo = motivo; }
     public void setCicloFin(long cicloFin) { this.cicloFin = cicloFin; }
