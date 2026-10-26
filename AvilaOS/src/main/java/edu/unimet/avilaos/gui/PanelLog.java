@@ -23,7 +23,8 @@ public class PanelLog extends JPanel {
 
     public PanelLog() {
         super(new BorderLayout());
-        setBorder(BorderFactory.createTitledBorder("Log de eventos"));
+        // El titulo lo pone la pestana de la ventana
+        setBorder(BorderFactory.createEmptyBorder(2, 2, 2, 2));
 
         areaLog.setEditable(false);
         areaLog.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 12));
