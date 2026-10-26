@@ -91,6 +91,10 @@ public class PanelControles extends JPanel {
         btnCrearProceso.addActionListener(accion);
     }
 
+    public void alCrearBuffer(ActionListener accion) {
+        btnCrearBuffer.addActionListener(accion);
+    }
+
     public void alGuardarConfiguracion(ActionListener accion) {
         btnGuardarConfig.addActionListener(accion);
     }

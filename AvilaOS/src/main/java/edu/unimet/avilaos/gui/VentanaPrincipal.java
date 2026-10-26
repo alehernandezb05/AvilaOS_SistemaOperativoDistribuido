@@ -95,6 +95,7 @@ public class VentanaPrincipal extends JFrame {
         panelControles.alCambiarDuracionCiclo(simulador::setDuracionCicloMs);
         panelControles.alCambiarQuantum(simulador::setQuantum);
         panelControles.alCrearProceso(e -> abrirDialogoCrearProceso());
+        panelControles.alCrearBuffer(e -> new DialogoCrearBuffer(this, simulador).setVisible(true));
         panelControles.alGuardarConfiguracion(e -> guardarConfiguracion());
         panelControles.alCargarConfiguracion(e -> cargarConfiguracion());
     }
@@ -169,10 +170,9 @@ public class VentanaPrincipal extends JFrame {
 
     /** Abre el dialogo de crear proceso y lo envia al simulador. */
     private void abrirDialogoCrearProceso() {
-        // Todavia no hay buffers (#32, #41): productores y consumidores avisan que hay que crear uno
-        String[] buffers = new String[0];
+        // Sin buffers creados, productores y consumidores avisan que hay que crear uno
         DialogoCrearProceso dialogo = new DialogoCrearProceso(this,
-                simulador.getCantidadComputadores(), simulador.getCicloActual(), buffers);
+                simulador.getCantidadComputadores(), simulador.getCicloActual(), simulador.getIdsBuffers());
         dialogo.setVisible(true);
         PCB proceso = dialogo.getProcesoCreado();
         if (proceso != null) {
