@@ -1,18 +1,25 @@
 package edu.unimet.avilaos.gui;
 
+import edu.unimet.avilaos.so.Log;
 import java.awt.BorderLayout;
 import java.awt.Font;
 import javax.swing.BorderFactory;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.JTextArea;
+import javax.swing.text.BadLocationException;
 
 /**
- * Log de eventos del sistema. Por ahora muestra lineas de ejemplo.
+ * Muestra el log de eventos del sistema. Solo lee el Log del modelo: en cada
+ * refresco agrega los eventos nuevos desde la ultima lectura.
  */
 public class PanelLog extends JPanel {
 
+    /** Lineas que se conservan en pantalla; las mas viejas se recortan. */
+    public static final int MAX_LINEAS = 500;
+
     private final JTextArea areaLog = new JTextArea();
+    private long ultimoLeido = 0;
 
     public PanelLog() {
         super(new BorderLayout());
@@ -20,15 +27,35 @@ public class PanelLog extends JPanel {
 
         areaLog.setEditable(false);
         areaLog.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 12));
-        areaLog.setText("[ciclo 12] Computador 1 selecciona el proceso P3\n"
-                + "[ciclo 13] Proceso P6 se bloquea en el semaforo 'llenos' del buffer B2\n"
-                + "[ciclo 14] Proceso P5 accede al buffer B2 de forma remota\n");
         add(new JScrollPane(areaLog), BorderLayout.CENTER);
     }
 
-    /** Agrega una linea al final del log y la deja visible. */
-    public void agregarLinea(String linea) {
-        areaLog.append(linea + "\n");
+    /** Agrega los eventos registrados desde la ultima llamada. Se llama desde el hilo de Swing. */
+    public void actualizar(Log log) {
+        String[] nuevos = log.obtenerDesde(ultimoLeido);
+        ultimoLeido = log.getTotalRegistrados();
+        if (nuevos.length == 0) {
+            return;
+        }
+        StringBuilder texto = new StringBuilder();
+        for (String evento : nuevos) {
+            texto.append(evento).append('\n');
+        }
+        areaLog.append(texto.toString());
+        recortar();
         areaLog.setCaretPosition(areaLog.getDocument().getLength());
+    }
+
+    // Quita las lineas mas viejas para que el area de texto no crezca sin limite
+    private void recortar() {
+        int sobrantes = areaLog.getLineCount() - 1 - MAX_LINEAS;  // la ultima linea queda vacia
+        if (sobrantes <= 0) {
+            return;
+        }
+        try {
+            areaLog.replaceRange("", 0, areaLog.getLineEndOffset(sobrantes - 1));
+        } catch (BadLocationException e) {
+            areaLog.setText("");
+        }
     }
 }

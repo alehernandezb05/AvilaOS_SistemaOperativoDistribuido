@@ -77,6 +77,7 @@ public class VentanaPrincipal extends JFrame {
         for (PanelComputador panel : panelesComputador) {
             panel.actualizar();
         }
+        panelLog.actualizar(simulador.getLog());
     }
 
     /** Abre la Vista 1 y, si el usuario crea un proceso, lo envia a su computador. */
@@ -86,10 +87,7 @@ public class VentanaPrincipal extends JFrame {
         dialogo.setVisible(true);
         PCB proceso = dialogo.getProcesoCreado();
         if (proceso != null) {
-            simulador.agregarProceso(proceso);
-            // Mientras el PanelLog no muestre el Log del modelo (#28), se avisa aqui
-            panelLog.agregarLinea("Proceso " + proceso + " creado en el computador "
-                    + proceso.getIdComputador() + " (" + proceso.getTipo() + ")");
+            simulador.agregarProceso(proceso);  // el Simulador registra la creacion en el log
         }
     }
 }

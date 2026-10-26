@@ -2,6 +2,7 @@ package edu.unimet.avilaos.cluster;
 
 import edu.unimet.avilaos.hardware.Reloj;
 import edu.unimet.avilaos.so.EstrategiaPlanificacion;
+import edu.unimet.avilaos.so.Log;
 import edu.unimet.avilaos.so.PCB;
 import edu.unimet.avilaos.so.PoliticaPlanificacion;
 import edu.unimet.avilaos.so.politicas.EDF;
@@ -19,6 +20,7 @@ public class Simulador {
 
     private final Reloj reloj;
     private final Computador[] computadores;
+    private final Log log = new Log();
     private volatile int quantum;
     private boolean iniciado = false;
 
@@ -39,9 +41,10 @@ public class Simulador {
         this.quantum = quantum;
         this.reloj = new Reloj(duracionCicloMs);
         this.computadores = new Computador[tamanosRam.length];
-        // Los IDs de los computadores empiezan en 1
+        // Los IDs de los computadores empiezan en 1; todos comparten el mismo log global
         for (int i = 0; i < tamanosRam.length; i++) {
             computadores[i] = new Computador(i + 1, tamanosRam[i], crearEstrategia(politicas[i], quantum), reloj);
+            computadores[i].setLog(log);
         }
     }
 
@@ -75,6 +78,8 @@ public class Simulador {
 
     public void agregarProceso(PCB proceso) {
         getComputador(proceso.getIdComputador()).agregarProceso(proceso);
+        log.registrar(getCicloActual(), "Proceso " + proceso + " creado en el computador "
+                + proceso.getIdComputador() + " (" + proceso.getTipo() + ")");
     }
 
     public void cambiarPolitica(int idComputador, PoliticaPlanificacion politica) {
@@ -106,6 +111,7 @@ public class Simulador {
         return computadores[id - 1];
     }
 
+    public Log getLog() { return log; }
     public int getCantidadComputadores() { return computadores.length; }
     public int getQuantum() { return quantum; }
     public long getCicloActual() { return reloj.getCicloActual(); }
