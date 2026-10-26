@@ -12,8 +12,7 @@ import javax.swing.Timer;
 
 /**
  * Ventana principal del simulador. Arriba los controles, al centro un panel por
- * computador y abajo los buffers y el log. La GUI solo observa al modelo: un
- * Timer de Swing lee el Simulador cada cierto tiempo y actualiza los paneles.
+ * computador y abajo los buffers, el log y el grafico de utilizacion.
  */
 public class VentanaPrincipal extends JFrame {
 
@@ -22,6 +21,7 @@ public class VentanaPrincipal extends JFrame {
     private final Simulador simulador;
     private final PanelControles panelControles = new PanelControles();
     private final PanelLog panelLog = new PanelLog();
+    private final PanelGraficoUtilizacion panelGrafico;
     private final PanelComputador[] panelesComputador;
     private final Timer refresco;
 
@@ -45,11 +45,16 @@ public class VentanaPrincipal extends JFrame {
             computadores.add(panelesComputador[i]);
         }
 
-        JSplitPane inferior = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, new PanelBuffers(), panelLog);
-        inferior.setResizeWeight(0.5);
+        panelGrafico = new PanelGraficoUtilizacion(simulador);
+
+        JSplitPane inferiorDerecha = new JSplitPane(JSplitPane.VERTICAL_SPLIT, panelLog, panelGrafico);
+        inferiorDerecha.setResizeWeight(0.5);
+
+        JSplitPane inferior = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, new PanelBuffers(), inferiorDerecha);
+        inferior.setResizeWeight(0.4);
 
         JSplitPane principal = new JSplitPane(JSplitPane.VERTICAL_SPLIT, new JScrollPane(computadores), inferior);
-        principal.setResizeWeight(0.7);
+        principal.setResizeWeight(0.6);
         add(principal, BorderLayout.CENTER);
 
         setSize(1400, 850);
@@ -77,6 +82,7 @@ public class VentanaPrincipal extends JFrame {
         for (PanelComputador panel : panelesComputador) {
             panel.actualizar();
         }
+        panelGrafico.actualizar();
     }
 
     /** Abre la Vista 1 y, si el usuario crea un proceso, lo envia a su computador. */
