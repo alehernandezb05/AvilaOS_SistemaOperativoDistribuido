@@ -1,6 +1,7 @@
 package edu.unimet.avilaos.gui;
 
 import edu.unimet.avilaos.cluster.Simulador;
+import edu.unimet.avilaos.so.PCB;
 import java.awt.BorderLayout;
 import java.awt.GridLayout;
 import javax.swing.JFrame;
@@ -20,6 +21,7 @@ public class VentanaPrincipal extends JFrame {
 
     private final Simulador simulador;
     private final PanelControles panelControles = new PanelControles();
+    private final PanelLog panelLog = new PanelLog();
     private final PanelComputador[] panelesComputador;
     private final Timer refresco;
 
@@ -43,7 +45,7 @@ public class VentanaPrincipal extends JFrame {
             computadores.add(panelesComputador[i]);
         }
 
-        JSplitPane inferior = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, new PanelBuffers(), new PanelLog());
+        JSplitPane inferior = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, new PanelBuffers(), panelLog);
         inferior.setResizeWeight(0.5);
 
         JSplitPane principal = new JSplitPane(JSplitPane.VERTICAL_SPLIT, new JScrollPane(computadores), inferior);
@@ -65,6 +67,7 @@ public class VentanaPrincipal extends JFrame {
         panelControles.alPausar(e -> simulador.pausar());
         panelControles.alCambiarDuracionCiclo(simulador::setDuracionCicloMs);
         panelControles.alCambiarQuantum(simulador::setQuantum);
+        panelControles.alCrearProceso(e -> abrirDialogoCrearProceso());
     }
 
     /** Lee el estado del simulador y repinta los paneles. */
@@ -73,6 +76,20 @@ public class VentanaPrincipal extends JFrame {
         panelControles.setCorriendo(simulador.estaCorriendo());
         for (PanelComputador panel : panelesComputador) {
             panel.actualizar();
+        }
+    }
+
+    /** Abre la Vista 1 y, si el usuario crea un proceso, lo envia a su computador. */
+    private void abrirDialogoCrearProceso() {
+        DialogoCrearProceso dialogo = new DialogoCrearProceso(this,
+                simulador.getCantidadComputadores(), simulador.getCicloActual());
+        dialogo.setVisible(true);
+        PCB proceso = dialogo.getProcesoCreado();
+        if (proceso != null) {
+            simulador.agregarProceso(proceso);
+            // Mientras el PanelLog no muestre el Log del modelo (#28), se avisa aqui
+            panelLog.agregarLinea("Proceso " + proceso + " creado en el computador "
+                    + proceso.getIdComputador() + " (" + proceso.getTipo() + ")");
         }
     }
 }

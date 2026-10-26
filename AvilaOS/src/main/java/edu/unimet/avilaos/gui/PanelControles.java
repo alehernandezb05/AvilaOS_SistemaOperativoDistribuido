@@ -86,6 +86,11 @@ public class PanelControles extends JPanel {
         btnPausar.addActionListener(accion);
     }
 
+    /** La ventana decide que hacer al pulsar "Crear proceso". */
+    public void alCrearProceso(ActionListener accion) {
+        btnCrearProceso.addActionListener(accion);
+    }
+
     // El JSpinner solo acepta enteros dentro de su rango: si se escribe algo invalido
     // vuelve al ultimo valor valido, asi que aqui solo llegan valores correctos
     public void alCambiarDuracionCiclo(IntConsumer accion) {
