@@ -162,6 +162,7 @@ public class Simulador {
     }
 
     public int getLatenciaRed() { return latenciaRed; }
+
     /**
      * Crea un buffer en el computador anfitrion y reserva su RAM.
      * @throws IllegalArgumentException si la capacidad o el anfitrion no son validos,
@@ -178,8 +179,11 @@ public class Simulador {
             throw new IllegalArgumentException("El computador " + idAnfitrion + " no tiene " + memoria
                     + " de RAM libre para el buffer (libre: " + anfitrion.getRam().getLibre() + ").");
         }
-        Buffer buffer = new Buffer(capacidad, idAnfitrion);
+        Buffer buffer;
         synchronized (buffers) {
+            // Se numeran desde B1 en cada simulacion, asi al recargar una configuracion
+            // los buffers reciben los mismos IDs que usan sus productores y consumidores
+            buffer = new Buffer("B" + (buffers.getTamano() + 1), capacidad, idAnfitrion);
             buffers.agregar(buffer);
         }
         log.registrar(getCicloActual(), "Buffer " + buffer.getId() + " creado en el computador " + idAnfitrion
