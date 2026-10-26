@@ -5,6 +5,7 @@ import edu.unimet.avilaos.config.Configuracion;
 import edu.unimet.avilaos.config.Configuracion.ConfigComputador;
 import edu.unimet.avilaos.estructuras.Lista;
 import edu.unimet.avilaos.hardware.Reloj;
+import edu.unimet.avilaos.so.Buffer;
 import edu.unimet.avilaos.so.EstrategiaPlanificacion;
 import edu.unimet.avilaos.so.Log;
 import edu.unimet.avilaos.so.PCB;
@@ -28,6 +29,7 @@ public class Simulador {
     private final int latenciaRed;       // ciclos que cuesta cada acceso a un buffer remoto
     // Datos con los que se creo cada proceso, para guardarlos como carga inicial
     private final Lista<ConfigProceso> procesosCreados = new Lista<>();
+    private final Lista<Buffer> buffers = new Lista<>();
     private volatile int quantum;
     private boolean iniciado = false;
 
@@ -160,6 +162,64 @@ public class Simulador {
     }
 
     public int getLatenciaRed() { return latenciaRed; }
+    /**
+     * Crea un buffer en el computador anfitrion y reserva su RAM.
+     * @throws IllegalArgumentException si la capacidad o el anfitrion no son validos,
+     *         o si el anfitrion no tiene RAM libre suficiente (en ese caso no se crea nada)
+     */
+    public Buffer crearBuffer(int capacidad, int idAnfitrion) {
+        Computador anfitrion = getComputador(idAnfitrion);
+        if (capacidad < Buffer.MIN_CAPACIDAD || capacidad > Buffer.MAX_CAPACIDAD) {
+            throw new IllegalArgumentException("La capacidad del buffer debe estar entre " + Buffer.MIN_CAPACIDAD
+                    + " y " + Buffer.MAX_CAPACIDAD + " (vale " + capacidad + ").");
+        }
+        int memoria = capacidad * Buffer.MEMORIA_POR_ELEMENTO;
+        if (!anfitrion.getRam().reservar(memoria)) {
+            throw new IllegalArgumentException("El computador " + idAnfitrion + " no tiene " + memoria
+                    + " de RAM libre para el buffer (libre: " + anfitrion.getRam().getLibre() + ").");
+        }
+        Buffer buffer = new Buffer(capacidad, idAnfitrion);
+        synchronized (buffers) {
+            buffers.agregar(buffer);
+        }
+        log.registrar(getCicloActual(), "Buffer " + buffer.getId() + " creado en el computador " + idAnfitrion
+                + " (capacidad " + capacidad + ", ocupa " + memoria + " de RAM)");
+        return buffer;
+    }
+
+    /** Devuelve el buffer con ese ID, o null si no existe. */
+    public Buffer getBuffer(String id) {
+        synchronized (buffers) {
+            for (int i = 0; i < buffers.getTamano(); i++) {
+                if (buffers.obtener(i).getId().equals(id)) {
+                    return buffers.obtener(i);
+                }
+            }
+            return null;
+        }
+    }
+
+    /** Copia de los buffers del cluster, en orden de creacion (para la GUI). */
+    public Buffer[] getBuffers() {
+        synchronized (buffers) {
+            Buffer[] copia = new Buffer[buffers.getTamano()];
+            for (int i = 0; i < copia.length; i++) {
+                copia[i] = buffers.obtener(i);
+            }
+            return copia;
+        }
+    }
+
+    /** IDs de los buffers, para elegir uno al crear productores y consumidores. */
+    public String[] getIdsBuffers() {
+        Buffer[] todos = getBuffers();
+        String[] ids = new String[todos.length];
+        for (int i = 0; i < ids.length; i++) {
+            ids[i] = todos[i].getId();
+        }
+        return ids;
+    }
+
     public Log getLog() { return log; }
     public int getCantidadComputadores() { return computadores.length; }
     public int getQuantum() { return quantum; }
