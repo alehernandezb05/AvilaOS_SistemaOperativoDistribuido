@@ -3,6 +3,7 @@ package edu.unimet.avilaos.gui;
 import edu.unimet.avilaos.config.ArchivoConfiguracion;
 import edu.unimet.avilaos.config.ConfigProceso;
 import edu.unimet.avilaos.config.Configuracion;
+import edu.unimet.avilaos.config.Configuracion.ConfigBuffer;
 import edu.unimet.avilaos.config.Configuracion.ConfigComputador;
 import edu.unimet.avilaos.config.ConfiguracionInvalidaException;
 import edu.unimet.avilaos.so.PoliticaPlanificacion;
@@ -42,7 +43,9 @@ public class DialogoConfiguracionInicial extends JDialog {
     private final JComboBox<PoliticaPlanificacion>[] comboPolitica = new JComboBox[Configuracion.MAX_COMPUTADORES];
 
     private final JLabel lblProcesos = new JLabel();
-    private ConfigProceso[] procesosCargados = new ConfigProceso[0];  // carga inicial del ultimo archivo
+    // Carga inicial del ultimo archivo cargado
+    private ConfigBuffer[] buffersCargados = new ConfigBuffer[0];
+    private ConfigProceso[] procesosCargados = new ConfigProceso[0];
     private Configuracion resultado = null;
 
     public DialogoConfiguracionInicial(Configuracion inicial) {
@@ -135,8 +138,10 @@ public class DialogoConfiguracionInicial extends JDialog {
         try {
             Configuracion cargada = ArchivoConfiguracion.cargar(archivo);
             mostrarEnCampos(cargada);
+            buffersCargados = cargada.getBuffers();
             procesosCargados = cargada.getProcesos();
-            lblProcesos.setText(procesosCargados.length + " procesos en la carga inicial del archivo");
+            lblProcesos.setText("Carga inicial: " + buffersCargados.length + " buffers y "
+                    + procesosCargados.length + " procesos");
         } catch (IOException e) {
             error("No se pudo leer el archivo: " + e.getMessage());
         } catch (ConfiguracionInvalidaException e) {
@@ -165,7 +170,7 @@ public class DialogoConfiguracionInicial extends JDialog {
                     (PoliticaPlanificacion) comboPolitica[i].getSelectedItem());
         }
         Configuracion config = new Configuracion((Integer) spnCiclo.getValue(), (Integer) spnQuantum.getValue(),
-                (Integer) spnLatencia.getValue(), computadores, procesosCargados);
+                (Integer) spnLatencia.getValue(), computadores, buffersCargados, procesosCargados);
         try {
             config.validar();
         } catch (ConfiguracionInvalidaException e) {

@@ -95,4 +95,5 @@ public class ConfigProceso {
     public String getNombre() { return nombre; }
     public int getComputador() { return computador; }
     public TipoProceso getTipo() { return tipo; }
+    public String getIdBuffer() { return idBuffer; }
 }
