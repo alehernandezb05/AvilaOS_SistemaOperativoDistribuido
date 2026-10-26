@@ -32,6 +32,7 @@ public class VentanaPrincipal extends JFrame {
     private final Simulador simulador;
     private final PanelControles panelControles = new PanelControles();
     private final PanelLog panelLog = new PanelLog();
+    private final PanelBuffers panelBuffers = new PanelBuffers();
     private final PanelGraficoUtilizacion panelGrafico;
     private final PanelComputador[] panelesComputador;
     private final Timer refresco;
@@ -69,7 +70,7 @@ public class VentanaPrincipal extends JFrame {
         JSplitPane inferiorDerecha = new JSplitPane(JSplitPane.VERTICAL_SPLIT, panelLog, panelGrafico);
         inferiorDerecha.setResizeWeight(0.5);
 
-        JSplitPane inferior = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, new PanelBuffers(), inferiorDerecha);
+        JSplitPane inferior = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, panelBuffers, inferiorDerecha);
         inferior.setResizeWeight(0.4);
 
         JScrollPane scrollComputadores = new JScrollPane(computadores);
@@ -94,6 +95,7 @@ public class VentanaPrincipal extends JFrame {
         panelControles.alCambiarDuracionCiclo(simulador::setDuracionCicloMs);
         panelControles.alCambiarQuantum(simulador::setQuantum);
         panelControles.alCrearProceso(e -> abrirDialogoCrearProceso());
+        panelControles.alCrearBuffer(e -> new DialogoCrearBuffer(this, simulador).setVisible(true));
         panelControles.alGuardarConfiguracion(e -> guardarConfiguracion());
         panelControles.alCargarConfiguracion(e -> cargarConfiguracion());
     }
@@ -163,14 +165,14 @@ public class VentanaPrincipal extends JFrame {
         }
         panelGrafico.actualizar();
         panelLog.actualizar(simulador.getLog());
+        panelBuffers.actualizar(simulador.getBuffers());
     }
 
     /** Abre el dialogo de crear proceso y lo envia al simulador. */
     private void abrirDialogoCrearProceso() {
-        // Todavia no hay buffers (#32, #41): productores y consumidores avisan que hay que crear uno
-        String[] buffers = new String[0];
+        // Sin buffers creados, productores y consumidores avisan que hay que crear uno
         DialogoCrearProceso dialogo = new DialogoCrearProceso(this,
-                simulador.getCantidadComputadores(), simulador.getCicloActual(), buffers);
+                simulador.getCantidadComputadores(), simulador.getCicloActual(), simulador.getIdsBuffers());
         dialogo.setVisible(true);
         PCB proceso = dialogo.getProcesoCreado();
         if (proceso != null) {

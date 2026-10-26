@@ -18,14 +18,6 @@ public class Buffer {
     /** RAM que ocupa cada elemento de capacidad en el computador anfitrion. */
     public static final int MEMORIA_POR_ELEMENTO = 1;
 
-    // Contador compartido: IDs B1, B2... unicos en todo el sistema
-    private static int contadorIds = 0;
-
-    private static synchronized String siguienteId() {
-        contadorIds++;
-        return "B" + contadorIds;
-    }
-
     private final String id;
     private final int idAnfitrion;
     private final int capacidad;
@@ -41,12 +33,16 @@ public class Buffer {
     // Protege el contenido entre el hilo del reloj y la GUI (no es un semaforo de AvilaOS)
     private final Semaphore cerrojo = new Semaphore(1);
 
-    public Buffer(int capacidad, int idAnfitrion) {
+    /**
+     * @param id lo asigna el Simulador (B1, B2...), unico dentro de la simulacion y
+     *           el mismo al recargar una configuracion, para que los procesos lo encuentren
+     */
+    public Buffer(String id, int capacidad, int idAnfitrion) {
         if (capacidad < MIN_CAPACIDAD || capacidad > MAX_CAPACIDAD) {
             throw new IllegalArgumentException("La capacidad del buffer debe estar entre " + MIN_CAPACIDAD
                     + " y " + MAX_CAPACIDAD + " (vale " + capacidad + ").");
         }
-        this.id = siguienteId();
+        this.id = id;
         this.idAnfitrion = idAnfitrion;
         this.capacidad = capacidad;
         this.vacios = new Semaforo(id + ".vacios", TipoSemaforo.CONTEO, capacidad);

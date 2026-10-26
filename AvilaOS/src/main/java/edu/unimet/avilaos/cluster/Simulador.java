@@ -2,6 +2,7 @@ package edu.unimet.avilaos.cluster;
 
 import edu.unimet.avilaos.config.ConfigProceso;
 import edu.unimet.avilaos.config.Configuracion;
+import edu.unimet.avilaos.config.Configuracion.ConfigBuffer;
 import edu.unimet.avilaos.config.Configuracion.ConfigComputador;
 import edu.unimet.avilaos.estructuras.Lista;
 import edu.unimet.avilaos.hardware.Reloj;
@@ -33,10 +34,17 @@ public class Simulador {
     private volatile int quantum;
     private boolean iniciado = false;
 
-    /** Crea el cluster con los parametros de una configuracion ya validada y su carga inicial de procesos. */
+    /**
+     * Crea el cluster con los parametros de una configuracion ya validada y su carga
+     * inicial. Primero los buffers (reciben B1, B2... en el mismo orden en que se
+     * guardaron) y despues los procesos que los usan.
+     */
     public Simulador(Configuracion config) {
         this(config.getDuracionCicloMs(), config.getQuantum(), config.getLatenciaRed(),
                 config.getTamanosRam(), config.getPoliticas());
+        for (ConfigBuffer buffer : config.getBuffers()) {
+            crearBuffer(buffer.getCapacidad(), buffer.getAnfitrion());
+        }
         for (ConfigProceso proceso : config.getProcesos()) {
             agregarProceso(proceso.crearPCB(0));
         }
@@ -143,9 +151,14 @@ public class Simulador {
 
     /**
      * Parametros actuales del cluster (con la politica que tiene ahora cada computador)
-     * y los procesos creados hasta ahora como carga inicial, para guardarlos.
+     * y los buffers y procesos creados hasta ahora como carga inicial, para guardarlos.
      */
     public Configuracion getConfiguracion() {
+        Buffer[] existentes = getBuffers();
+        ConfigBuffer[] datosBuffers = new ConfigBuffer[existentes.length];
+        for (int i = 0; i < existentes.length; i++) {
+            datosBuffers[i] = new ConfigBuffer(existentes[i].getCapacidad(), existentes[i].getIdAnfitrion());
+        }
         ConfigComputador[] datos = new ConfigComputador[computadores.length];
         for (int i = 0; i < computadores.length; i++) {
             Computador c = computadores[i];
@@ -158,10 +171,11 @@ public class Simulador {
                 procesos[i] = procesosCreados.obtener(i);
             }
         }
-        return new Configuracion(getDuracionCicloMs(), quantum, latenciaRed, datos, procesos);
+        return new Configuracion(getDuracionCicloMs(), quantum, latenciaRed, datos, datosBuffers, procesos);
     }
 
     public int getLatenciaRed() { return latenciaRed; }
+
     /**
      * Crea un buffer en el computador anfitrion y reserva su RAM.
      * @throws IllegalArgumentException si la capacidad o el anfitrion no son validos,
@@ -178,8 +192,11 @@ public class Simulador {
             throw new IllegalArgumentException("El computador " + idAnfitrion + " no tiene " + memoria
                     + " de RAM libre para el buffer (libre: " + anfitrion.getRam().getLibre() + ").");
         }
-        Buffer buffer = new Buffer(capacidad, idAnfitrion);
+        Buffer buffer;
         synchronized (buffers) {
+            // Se numeran desde B1 en cada simulacion, asi al recargar una configuracion
+            // los buffers reciben los mismos IDs que usan sus productores y consumidores
+            buffer = new Buffer("B" + (buffers.getTamano() + 1), capacidad, idAnfitrion);
             buffers.agregar(buffer);
         }
         log.registrar(getCicloActual(), "Buffer " + buffer.getId() + " creado en el computador " + idAnfitrion
