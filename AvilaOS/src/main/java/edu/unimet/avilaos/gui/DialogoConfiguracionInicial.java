@@ -34,7 +34,8 @@ public class DialogoConfiguracionInicial extends JDialog {
     private final JSpinner spnQuantum = spinner(3, Configuracion.MIN_QUANTUM, Configuracion.MAX_QUANTUM, 1);
     private final JSpinner spnLatencia = spinner(2, Configuracion.MIN_LATENCIA, Configuracion.MAX_LATENCIA, 1);
 
-    // Se crean todas las filas posibles y solo se muestran las de la cantidad elegida
+    // Se crean todas las filas posibles y solo se agregan al panel las de la cantidad elegida
+    private final JPanel filas = new JPanel(new GridLayout(0, 3, 8, 4));
     private final JLabel[] lblComputador = new JLabel[Configuracion.MAX_COMPUTADORES];
     private final JSpinner[] spnRam = new JSpinner[Configuracion.MAX_COMPUTADORES];
     @SuppressWarnings("unchecked")
@@ -59,7 +60,6 @@ public class DialogoConfiguracionInicial extends JDialog {
         generales.add(new JLabel("Latencia de red en ciclos (" + Configuracion.MIN_LATENCIA + "-" + Configuracion.MAX_LATENCIA + "):"));
         generales.add(spnLatencia);
 
-        JPanel filas = new JPanel(new GridLayout(0, 3, 8, 4));
         filas.setBorder(BorderFactory.createCompoundBorder(
                 BorderFactory.createEmptyBorder(0, 10, 0, 10),
                 BorderFactory.createTitledBorder("Computadores (RAM " + Configuracion.MIN_RAM + "-" + Configuracion.MAX_RAM + ")")));
@@ -67,9 +67,6 @@ public class DialogoConfiguracionInicial extends JDialog {
             lblComputador[i] = new JLabel("Computador " + (i + 1));
             spnRam[i] = spinner(256, Configuracion.MIN_RAM, Configuracion.MAX_RAM, 16);
             comboPolitica[i] = new JComboBox<>(PoliticaPlanificacion.values());
-            filas.add(lblComputador[i]);
-            filas.add(spnRam[i]);
-            filas.add(comboPolitica[i]);
         }
         spnCantidad.addChangeListener(e -> mostrarFilas());
 
@@ -104,15 +101,16 @@ public class DialogoConfiguracionInicial extends JDialog {
         return new JSpinner(new SpinnerNumberModel(valor, min, max, paso));
     }
 
-    /** Muestra solo las filas de los computadores elegidos y ajusta el tamano. */
+    /** Deja en el panel solo las filas de los computadores elegidos y ajusta el tamano. */
     private void mostrarFilas() {
         int cantidad = (Integer) spnCantidad.getValue();
-        for (int i = 0; i < Configuracion.MAX_COMPUTADORES; i++) {
-            boolean visible = i < cantidad;
-            lblComputador[i].setVisible(visible);
-            spnRam[i].setVisible(visible);
-            comboPolitica[i].setVisible(visible);
+        filas.removeAll();
+        for (int i = 0; i < cantidad; i++) {
+            filas.add(lblComputador[i]);
+            filas.add(spnRam[i]);
+            filas.add(comboPolitica[i]);
         }
+        filas.revalidate();
         pack();
     }
 
