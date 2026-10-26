@@ -1,7 +1,9 @@
 package edu.unimet.avilaos.cluster;
 
+import edu.unimet.avilaos.config.ConfigProceso;
 import edu.unimet.avilaos.config.Configuracion;
 import edu.unimet.avilaos.config.Configuracion.ConfigComputador;
+import edu.unimet.avilaos.estructuras.Lista;
 import edu.unimet.avilaos.hardware.Reloj;
 import edu.unimet.avilaos.so.EstrategiaPlanificacion;
 import edu.unimet.avilaos.so.Log;
@@ -24,13 +26,18 @@ public class Simulador {
     private final Computador[] computadores;
     private final Log log = new Log();
     private final int latenciaRed;       // ciclos que cuesta cada acceso a un buffer remoto
+    // Datos con los que se creo cada proceso, para guardarlos como carga inicial
+    private final Lista<ConfigProceso> procesosCreados = new Lista<>();
     private volatile int quantum;
     private boolean iniciado = false;
 
-    /** Crea el cluster con los parametros de una configuracion ya validada. */
+    /** Crea el cluster con los parametros de una configuracion ya validada y su carga inicial de procesos. */
     public Simulador(Configuracion config) {
         this(config.getDuracionCicloMs(), config.getQuantum(), config.getLatenciaRed(),
                 config.getTamanosRam(), config.getPoliticas());
+        for (ConfigProceso proceso : config.getProcesos()) {
+            agregarProceso(proceso.crearPCB(0));
+        }
     }
 
     public Simulador(int duracionCicloMs, int quantum, int[] tamanosRam, PoliticaPlanificacion[] politicas) {
@@ -96,6 +103,9 @@ public class Simulador {
 
     public void agregarProceso(PCB proceso) {
         getComputador(proceso.getIdComputador()).agregarProceso(proceso);
+        synchronized (procesosCreados) {
+            procesosCreados.agregar(ConfigProceso.desde(proceso));
+        }
         log.registrar(getCicloActual(), "Proceso " + proceso + " creado en el computador "
                 + proceso.getIdComputador() + " (" + proceso.getTipo() + ")");
     }
@@ -129,14 +139,24 @@ public class Simulador {
         return computadores[id - 1];
     }
 
-    /** Parametros actuales del cluster (con la politica que tiene ahora cada computador), para guardarlos. */
+    /**
+     * Parametros actuales del cluster (con la politica que tiene ahora cada computador)
+     * y los procesos creados hasta ahora como carga inicial, para guardarlos.
+     */
     public Configuracion getConfiguracion() {
         ConfigComputador[] datos = new ConfigComputador[computadores.length];
         for (int i = 0; i < computadores.length; i++) {
             Computador c = computadores[i];
             datos[i] = new ConfigComputador(c.getRam().getTotal(), c.getNucleo().getEstrategia().getPolitica());
         }
-        return new Configuracion(getDuracionCicloMs(), quantum, latenciaRed, datos);
+        ConfigProceso[] procesos;
+        synchronized (procesosCreados) {
+            procesos = new ConfigProceso[procesosCreados.getTamano()];
+            for (int i = 0; i < procesos.length; i++) {
+                procesos[i] = procesosCreados.obtener(i);
+            }
+        }
+        return new Configuracion(getDuracionCicloMs(), quantum, latenciaRed, datos, procesos);
     }
 
     public int getLatenciaRed() { return latenciaRed; }

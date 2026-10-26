@@ -5,7 +5,7 @@ import edu.unimet.avilaos.so.PoliticaPlanificacion;
 /**
  * Parametros con los que arranca una simulacion. Se guarda y se carga en JSON
  * (ver ArchivoConfiguracion). Usa arreglos en lugar de colecciones de Java.
- * Pendiente: procesos y buffers iniciales, cuando existan el PCB completo y el Buffer.
+ * Pendiente: buffers iniciales, cuando exista el Buffer (#32).
  */
 public class Configuracion {
 
@@ -25,6 +25,7 @@ public class Configuracion {
     private int quantum;
     private int latenciaRed;           // ciclos que cuesta cada acceso a un buffer remoto
     private ConfigComputador[] computadores;
+    private ConfigProceso[] procesos;  // carga inicial; puede faltar en archivos viejos
 
     /** RAM y politica inicial de un computador del cluster. */
     public static class ConfigComputador {
@@ -41,10 +42,16 @@ public class Configuracion {
     }
 
     public Configuracion(int duracionCicloMs, int quantum, int latenciaRed, ConfigComputador[] computadores) {
+        this(duracionCicloMs, quantum, latenciaRed, computadores, new ConfigProceso[0]);
+    }
+
+    public Configuracion(int duracionCicloMs, int quantum, int latenciaRed, ConfigComputador[] computadores,
+                         ConfigProceso[] procesos) {
         this.duracionCicloMs = duracionCicloMs;
         this.quantum = quantum;
         this.latenciaRed = latenciaRed;
         this.computadores = computadores;
+        this.procesos = procesos;
     }
 
     /** Configuracion inicial cuando el usuario no carga ningun archivo. */
@@ -75,6 +82,13 @@ public class Configuracion {
                 throw new ConfiguracionInvalidaException("La politica del computador " + (i + 1) + " no es valida.");
             }
         }
+        ConfigProceso[] lista = getProcesos();
+        for (int i = 0; i < lista.length; i++) {
+            if (lista[i] == null) {
+                throw new ConfiguracionInvalidaException("Faltan los datos del proceso " + (i + 1) + ".");
+            }
+            lista[i].validar(i + 1, computadores.length);
+        }
     }
 
     private static void verificarRango(String campo, int valor, int min, int max)
@@ -90,6 +104,16 @@ public class Configuracion {
     public int getLatenciaRed() { return latenciaRed; }
     public int getCantidadComputadores() { return computadores.length; }
     public ConfigComputador getComputador(int indice) { return computadores[indice]; }
+
+    /** Procesos de la carga inicial (vacio si el archivo no tiene). */
+    public ConfigProceso[] getProcesos() {
+        return procesos == null ? new ConfigProceso[0] : procesos;
+    }
+
+    /** La misma configuracion con otra carga inicial de procesos. */
+    public Configuracion conProcesos(ConfigProceso[] nuevos) {
+        return new Configuracion(duracionCicloMs, quantum, latenciaRed, computadores, nuevos);
+    }
 
     /** RAM de cada computador, en el formato que recibe el Simulador. */
     public int[] getTamanosRam() {
