@@ -5,8 +5,9 @@
 package edu.unimet.avilaos;
 
 import edu.unimet.avilaos.cluster.Simulador;
+import edu.unimet.avilaos.config.Configuracion;
+import edu.unimet.avilaos.gui.DialogoConfiguracionInicial;
 import edu.unimet.avilaos.gui.VentanaPrincipal;
-import edu.unimet.avilaos.so.PoliticaPlanificacion;
 import javax.swing.SwingUtilities;
 import javax.swing.UIManager;
 
@@ -17,17 +18,35 @@ import javax.swing.UIManager;
 public class AvilaOS {
 
     public static void main(String[] args) {
-        // Configuracion fija mientras no exista la vista de configuracion inicial (#39)
-        Simulador simulador = new Simulador(500, 3, new int[] {256, 256},
-                new PoliticaPlanificacion[] {PoliticaPlanificacion.FCFS, PoliticaPlanificacion.FCFS});
-
         SwingUtilities.invokeLater(() -> {
             try {
                 UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
             } catch (Exception e) {
                 // Si falla se queda el look and feel por defecto de Swing
             }
-            new VentanaPrincipal(simulador).setVisible(true);
+            // Primero se configura el cluster; si el usuario sale, el programa termina
+            DialogoConfiguracionInicial dialogo = new DialogoConfiguracionInicial(Configuracion.porDefecto());
+            dialogo.setVisible(true);
+            Configuracion config = dialogo.getConfiguracion();
+            if (config == null) {
+                System.exit(0);
+            }
+            abrirSimulacion(config);
         });
+    }
+
+    /**
+     * Crea el Simulador y su ventana. Al cargar otra configuracion desde la ventana,
+     * se detiene esta simulacion, se cierra su ventana y se abre una nueva.
+     */
+    private static void abrirSimulacion(Configuracion config) {
+        Simulador simulador = new Simulador(config);
+        VentanaPrincipal[] ventana = new VentanaPrincipal[1];
+        ventana[0] = new VentanaPrincipal(simulador, nueva -> {
+            simulador.detener();
+            ventana[0].dispose();
+            abrirSimulacion(nueva);
+        });
+        ventana[0].setVisible(true);
     }
 }

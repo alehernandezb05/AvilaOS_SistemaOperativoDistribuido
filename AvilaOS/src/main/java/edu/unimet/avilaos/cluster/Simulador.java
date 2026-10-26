@@ -1,5 +1,9 @@
 package edu.unimet.avilaos.cluster;
 
+import edu.unimet.avilaos.config.ConfigProceso;
+import edu.unimet.avilaos.config.Configuracion;
+import edu.unimet.avilaos.config.Configuracion.ConfigComputador;
+import edu.unimet.avilaos.estructuras.Lista;
 import edu.unimet.avilaos.hardware.Reloj;
 import edu.unimet.avilaos.so.EstrategiaPlanificacion;
 import edu.unimet.avilaos.so.Log;
@@ -21,14 +25,31 @@ public class Simulador {
     private final Reloj reloj;
     private final Computador[] computadores;
     private final Log log = new Log();
+    private final int latenciaRed;       // ciclos que cuesta cada acceso a un buffer remoto
+    // Datos con los que se creo cada proceso, para guardarlos como carga inicial
+    private final Lista<ConfigProceso> procesosCreados = new Lista<>();
     private volatile int quantum;
     private boolean iniciado = false;
+
+    /** Crea el cluster con los parametros de una configuracion ya validada y su carga inicial de procesos. */
+    public Simulador(Configuracion config) {
+        this(config.getDuracionCicloMs(), config.getQuantum(), config.getLatenciaRed(),
+                config.getTamanosRam(), config.getPoliticas());
+        for (ConfigProceso proceso : config.getProcesos()) {
+            agregarProceso(proceso.crearPCB(0));
+        }
+    }
+
+    public Simulador(int duracionCicloMs, int quantum, int[] tamanosRam, PoliticaPlanificacion[] politicas) {
+        this(duracionCicloMs, quantum, Configuracion.porDefecto().getLatenciaRed(), tamanosRam, politicas);
+    }
 
     /**
      * @param tamanosRam RAM de cada computador; su largo es la cantidad de computadores
      * @param politicas  politica inicial de cada computador, mismo largo que tamanosRam
      */
-    public Simulador(int duracionCicloMs, int quantum, int[] tamanosRam, PoliticaPlanificacion[] politicas) {
+    public Simulador(int duracionCicloMs, int quantum, int latenciaRed, int[] tamanosRam,
+                     PoliticaPlanificacion[] politicas) {
         if (tamanosRam.length < MIN_COMPUTADORES) {
             throw new IllegalArgumentException("Se necesitan al menos " + MIN_COMPUTADORES + " computadores.");
         }
@@ -38,7 +59,11 @@ public class Simulador {
         if (quantum <= 0) {
             throw new IllegalArgumentException("El quantum debe ser mayor a 0.");
         }
+        if (latenciaRed < 0) {
+            throw new IllegalArgumentException("La latencia de red no puede ser negativa.");
+        }
         this.quantum = quantum;
+        this.latenciaRed = latenciaRed;
         this.reloj = new Reloj(duracionCicloMs);
         this.computadores = new Computador[tamanosRam.length];
         // Los IDs de los computadores empiezan en 1; todos comparten el mismo log global
@@ -78,6 +103,9 @@ public class Simulador {
 
     public void agregarProceso(PCB proceso) {
         getComputador(proceso.getIdComputador()).agregarProceso(proceso);
+        synchronized (procesosCreados) {
+            procesosCreados.agregar(ConfigProceso.desde(proceso));
+        }
         log.registrar(getCicloActual(), "Proceso " + proceso + " creado en el computador "
                 + proceso.getIdComputador() + " (" + proceso.getTipo() + ")");
     }
@@ -111,6 +139,27 @@ public class Simulador {
         return computadores[id - 1];
     }
 
+    /**
+     * Parametros actuales del cluster (con la politica que tiene ahora cada computador)
+     * y los procesos creados hasta ahora como carga inicial, para guardarlos.
+     */
+    public Configuracion getConfiguracion() {
+        ConfigComputador[] datos = new ConfigComputador[computadores.length];
+        for (int i = 0; i < computadores.length; i++) {
+            Computador c = computadores[i];
+            datos[i] = new ConfigComputador(c.getRam().getTotal(), c.getNucleo().getEstrategia().getPolitica());
+        }
+        ConfigProceso[] procesos;
+        synchronized (procesosCreados) {
+            procesos = new ConfigProceso[procesosCreados.getTamano()];
+            for (int i = 0; i < procesos.length; i++) {
+                procesos[i] = procesosCreados.obtener(i);
+            }
+        }
+        return new Configuracion(getDuracionCicloMs(), quantum, latenciaRed, datos, procesos);
+    }
+
+    public int getLatenciaRed() { return latenciaRed; }
     public Log getLog() { return log; }
     public int getCantidadComputadores() { return computadores.length; }
     public int getQuantum() { return quantum; }
