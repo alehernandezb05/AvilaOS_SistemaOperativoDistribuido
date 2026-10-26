@@ -3,6 +3,7 @@ package edu.unimet.avilaos.gui;
 import java.awt.Dimension;
 import java.awt.FlowLayout;
 import java.awt.event.ActionListener;
+import java.util.function.IntConsumer;
 import javax.swing.BorderFactory;
 import javax.swing.JButton;
 import javax.swing.JLabel;
@@ -14,7 +15,7 @@ import javax.swing.SwingConstants;
 
 /**
  * Barra superior: ciclo global, iniciar/pausar, duracion del ciclo, quantum
- * y acciones para crear procesos y buffers. Todavia no esta conectada al modelo.
+ * y acciones para crear procesos y buffers. La ventana conecta cada control al Simulador.
  */
 public class PanelControles extends JPanel {
 
@@ -55,14 +56,48 @@ public class PanelControles extends JPanel {
         btnPausar.setEnabled(false);
     }
 
+    private JSeparator separador() {
+        JSeparator s = new JSeparator(SwingConstants.VERTICAL);
+        s.setPreferredSize(new Dimension(2, 24));
+        return s;
+    }
+
+    public void setCiclo(long ciclo) {
+        lblCiclo.setText("Ciclo: " + ciclo);
+    }
+
+    /** Habilita Iniciar o Pausar segun si la simulacion esta corriendo. */
+    public void setCorriendo(boolean corriendo) {
+        btnIniciar.setEnabled(!corriendo);
+        btnPausar.setEnabled(corriendo);
+    }
+
+    /** Muestra los valores actuales sin avisar a los listeners (llamar antes de conectarlos). */
+    public void setValores(int duracionCicloMs, int quantum) {
+        spnDuracionCiclo.setValue(duracionCicloMs);
+        spnQuantum.setValue(quantum);
+    }
+
+    public void alIniciar(ActionListener accion) {
+        btnIniciar.addActionListener(accion);
+    }
+
+    public void alPausar(ActionListener accion) {
+        btnPausar.addActionListener(accion);
+    }
+
     /** La ventana decide que hacer al pulsar "Crear proceso". */
     public void alCrearProceso(ActionListener accion) {
         btnCrearProceso.addActionListener(accion);
     }
 
-    private JSeparator separador() {
-        JSeparator s = new JSeparator(SwingConstants.VERTICAL);
-        s.setPreferredSize(new Dimension(2, 24));
-        return s;
+    // El JSpinner solo acepta enteros dentro de su rango: si se escribe algo invalido
+    // vuelve al ultimo valor valido, asi que aqui solo llegan valores correctos
+    public void alCambiarDuracionCiclo(IntConsumer accion) {
+        spnDuracionCiclo.addChangeListener(e -> accion.accept((Integer) spnDuracionCiclo.getValue()));
+    }
+
+    public void alCambiarQuantum(IntConsumer accion) {
+        spnQuantum.addChangeListener(e -> accion.accept((Integer) spnQuantum.getValue()));
     }
 }
