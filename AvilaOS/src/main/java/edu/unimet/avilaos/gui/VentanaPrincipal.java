@@ -8,14 +8,11 @@ import javax.swing.JFrame;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.JSplitPane;
-import javax.swing.JTabbedPane;
 import javax.swing.Timer;
 
 /**
  * Ventana principal del simulador. Arriba los controles, al centro un panel por
- * computador y abajo los buffers, y el log y el grafico de utilizacion en pestanas.
- * La GUI solo observa al modelo: un Timer de Swing lee el Simulador cada cierto
- * tiempo y actualiza los paneles.
+ * computador y abajo los buffers, el log y el grafico de utilizacion.
  */
 public class VentanaPrincipal extends JFrame {
 
@@ -24,8 +21,8 @@ public class VentanaPrincipal extends JFrame {
     private final Simulador simulador;
     private final PanelControles panelControles = new PanelControles();
     private final PanelLog panelLog = new PanelLog();
-    private final PanelComputador[] panelesComputador;
     private final PanelGraficoUtilizacion panelGrafico;
+    private final PanelComputador[] panelesComputador;
     private final Timer refresco;
 
     public VentanaPrincipal(Simulador simulador) {
@@ -48,17 +45,16 @@ public class VentanaPrincipal extends JFrame {
             computadores.add(panelesComputador[i]);
         }
 
-        // El log y el grafico comparten la zona inferior derecha en pestanas
         panelGrafico = new PanelGraficoUtilizacion(simulador);
-        JTabbedPane pestanas = new JTabbedPane();
-        pestanas.addTab("Log de eventos", panelLog);
-        pestanas.addTab("Utilizacion de CPU", panelGrafico);
 
-        JSplitPane inferior = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, new PanelBuffers(), pestanas);
-        inferior.setResizeWeight(0.5);
+        JSplitPane inferiorDerecha = new JSplitPane(JSplitPane.VERTICAL_SPLIT, panelLog, panelGrafico);
+        inferiorDerecha.setResizeWeight(0.5);
+
+        JSplitPane inferior = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, new PanelBuffers(), inferiorDerecha);
+        inferior.setResizeWeight(0.4);
 
         JSplitPane principal = new JSplitPane(JSplitPane.VERTICAL_SPLIT, new JScrollPane(computadores), inferior);
-        principal.setResizeWeight(0.7);
+        principal.setResizeWeight(0.6);
         add(principal, BorderLayout.CENTER);
 
         setSize(1400, 850);
@@ -86,7 +82,6 @@ public class VentanaPrincipal extends JFrame {
         for (PanelComputador panel : panelesComputador) {
             panel.actualizar();
         }
-        panelLog.actualizar(simulador.getLog());
         panelGrafico.actualizar();
     }
 
@@ -97,7 +92,10 @@ public class VentanaPrincipal extends JFrame {
         dialogo.setVisible(true);
         PCB proceso = dialogo.getProcesoCreado();
         if (proceso != null) {
-            simulador.agregarProceso(proceso);  // el Simulador registra la creacion en el log
+            simulador.agregarProceso(proceso);
+            // Mientras el PanelLog no muestre el Log del modelo (#28), se avisa aqui
+            panelLog.agregarLinea("Proceso " + proceso + " creado en el computador "
+                    + proceso.getIdComputador() + " (" + proceso.getTipo() + ")");
         }
     }
 }
