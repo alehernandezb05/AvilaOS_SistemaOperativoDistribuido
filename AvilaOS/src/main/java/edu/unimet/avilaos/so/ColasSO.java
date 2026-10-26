@@ -66,6 +66,10 @@ public class ColasSO {
             mutex.release();
         }
     }
+    
+    public boolean quitarListo(PCB proceso) {
+    return listos.remover(proceso);
+}
 
     public boolean quitarBloqueado(PCB p) {
         mutex.acquireUninterruptibly();
