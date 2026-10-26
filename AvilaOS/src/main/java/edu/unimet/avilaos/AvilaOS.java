@@ -31,7 +31,22 @@ public class AvilaOS {
             if (config == null) {
                 System.exit(0);
             }
-            new VentanaPrincipal(new Simulador(config)).setVisible(true);
+            abrirSimulacion(config);
         });
+    }
+
+    /**
+     * Crea el Simulador y su ventana. Al cargar otra configuracion desde la ventana,
+     * se detiene esta simulacion, se cierra su ventana y se abre una nueva.
+     */
+    private static void abrirSimulacion(Configuracion config) {
+        Simulador simulador = new Simulador(config);
+        VentanaPrincipal[] ventana = new VentanaPrincipal[1];
+        ventana[0] = new VentanaPrincipal(simulador, nueva -> {
+            simulador.detener();
+            ventana[0].dispose();
+            abrirSimulacion(nueva);
+        });
+        ventana[0].setVisible(true);
     }
 }

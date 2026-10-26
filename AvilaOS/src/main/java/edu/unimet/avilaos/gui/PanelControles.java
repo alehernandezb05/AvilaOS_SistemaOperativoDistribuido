@@ -91,6 +91,14 @@ public class PanelControles extends JPanel {
         btnCrearProceso.addActionListener(accion);
     }
 
+    public void alGuardarConfiguracion(ActionListener accion) {
+        btnGuardarConfig.addActionListener(accion);
+    }
+
+    public void alCargarConfiguracion(ActionListener accion) {
+        btnCargarConfig.addActionListener(accion);
+    }
+
     // El JSpinner solo acepta enteros dentro de su rango: si se escribe algo invalido
     // vuelve al ultimo valor valido, asi que aqui solo llegan valores correctos
     public void alCambiarDuracionCiclo(IntConsumer accion) {
