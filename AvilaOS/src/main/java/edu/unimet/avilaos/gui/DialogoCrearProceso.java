@@ -20,7 +20,8 @@ import javax.swing.SpinnerNumberModel;
 
 /**
  * Vista 1: formulario para crear un proceso. Valida tipo y rango de cada campo
- * y, si todo es correcto, crea el PCB. Si hay un error lo explica y no se cierra.
+ * y, si todo es correcto, crea el PCB (la ventana lo envia al Simulador).
+ * Si hay un error lo explica y no se cierra.
  * Pendiente: los datos propios de cada tipo de proceso (#29).
  */
 public class DialogoCrearProceso extends JDialog {
