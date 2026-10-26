@@ -92,8 +92,10 @@ public class VentanaPrincipal extends JFrame {
 
     /** Abre la Vista 1 y, si el usuario crea un proceso, lo envia a su computador. */
     private void abrirDialogoCrearProceso() {
+        // Todavia no hay buffers (#32, #41): productores y consumidores avisan que hay que crear uno
+        String[] buffers = new String[0];
         DialogoCrearProceso dialogo = new DialogoCrearProceso(this,
-                simulador.getCantidadComputadores(), simulador.getCicloActual());
+                simulador.getCantidadComputadores(), simulador.getCicloActual(), buffers);
         dialogo.setVisible(true);
         PCB proceso = dialogo.getProcesoCreado();
         if (proceso != null) {
