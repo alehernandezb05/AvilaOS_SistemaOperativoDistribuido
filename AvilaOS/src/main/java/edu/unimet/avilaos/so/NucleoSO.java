@@ -18,6 +18,8 @@ public class NucleoSO implements ComponenteReloj {
     private final ColasSO colas = new ColasSO();
     private volatile EstrategiaPlanificacion estrategia;
     private int ciclosEnCpu = 0;
+    private volatile Log log;               // opcional: si es null no se registra nada
+    private volatile long cicloActual = 0;  // ultimo ciclo recibido, para fechar los eventos
 
     public NucleoSO(int idComputador, CPU cpu, RAM ram, EstrategiaPlanificacion estrategia) {
         this.idComputador = idComputador;
@@ -33,6 +35,7 @@ public class NucleoSO implements ComponenteReloj {
 
     @Override
     public void alCiclo(long cicloGlobal) {
+        cicloActual = cicloGlobal;
         terminarSiCorresponde(cicloGlobal);
         admitirNuevos();
         planificar();
@@ -50,6 +53,7 @@ public class NucleoSO implements ComponenteReloj {
             actual.setCicloFin(cicloGlobal);
             colas.agregarTerminado(actual);
             ciclosEnCpu = 0;
+            registrar("termina el proceso " + actual + " y libera " + actual.getMemoria() + " de RAM");
         }
     }
 
@@ -61,6 +65,7 @@ public class NucleoSO implements ComponenteReloj {
             if (ram.reservar(p.getMemoria())) {
                 colas.quitarNuevo(p);
                 colas.agregarListo(p);
+                registrar("admite el proceso " + p + " (nuevo -> listo)");
                 // no se avanza i: al quitar p, el siguiente ocupa su lugar
             } else {
                 i++;
@@ -76,6 +81,7 @@ public class NucleoSO implements ComponenteReloj {
             cpu.liberar();
             colas.agregarListo(actual);
             ciclosEnCpu = 0;
+            registrar("expropia el proceso " + actual + " (" + estrategia.getPolitica() + ")");
             actual = null;
         }
         if (actual == null) {
@@ -84,13 +90,27 @@ public class NucleoSO implements ComponenteReloj {
                 siguiente.setEstado(EstadoProceso.EJECUCION);
                 cpu.asignar(siguiente);
                 ciclosEnCpu = 0;
+                registrar("selecciona el proceso " + siguiente);
             }
+        }
+    }
+
+    /** Agrega el evento al log con el prefijo del computador, si hay log. */
+    private void registrar(String mensaje) {
+        Log l = log;
+        if (l != null) {
+            l.registrar(cicloActual, "Computador " + idComputador + " " + mensaje);
         }
     }
 
     /** Cambia la politica en tiempo de ejecucion. */
     public void setEstrategia(EstrategiaPlanificacion estrategia) {
         this.estrategia = estrategia;
+        registrar("cambia su politica a " + estrategia.getPolitica());
+    }
+
+    public void setLog(Log log) {
+        this.log = log;
     }
 
     public EstrategiaPlanificacion getEstrategia() { return estrategia; }

@@ -4,6 +4,7 @@ import edu.unimet.avilaos.hardware.CPU;
 import edu.unimet.avilaos.hardware.RAM;
 import edu.unimet.avilaos.hardware.Reloj;
 import edu.unimet.avilaos.so.EstrategiaPlanificacion;
+import edu.unimet.avilaos.so.Log;
 import edu.unimet.avilaos.so.NucleoSO;
 import edu.unimet.avilaos.so.PCB;
 
@@ -35,6 +36,11 @@ public class Computador {
     /** Cambia la politica de planificacion de este computador, sin afectar a los demas. */
     public void cambiarPolitica(EstrategiaPlanificacion estrategia) {
         nucleo.setEstrategia(estrategia);
+    }
+
+    /** Conecta el log global del sistema al nucleo de este computador. */
+    public void setLog(Log log) {
+        nucleo.setLog(log);
     }
 
     public int getId() { return id; }
