@@ -30,6 +30,8 @@ public class NucleoSO implements ComponenteReloj {
     public void alCiclo(long cicloGlobal) {
         cicloActual = cicloGlobal;
         terminarSiCorresponde(cicloGlobal);
+        avanzarBloqueados();
+        bloquearPorESSiCorresponde();
         procesarDeadlines(cicloGlobal);
         admitirNuevos();
         planificar();
@@ -51,6 +53,34 @@ public class NucleoSO implements ComponenteReloj {
             ciclosEnCpu = 0;
             finalizar(actual, MotivoTerminacion.COMPLETADO, cicloGlobal);
             registrar("termina el proceso " + actual + " y libera " + actual.getMemoria() + " de RAM");
+        }
+    }
+
+    private void avanzarBloqueados() {
+        int i = 0;
+        PCB bloqueado = colas.obtenerBloqueado(i);
+        while (bloqueado != null) {
+            bloqueado.sumarCicloBloqueado();
+            if (bloqueado.getMotivoBloqueo() == MotivoBloqueo.ESPERA_ES && bloqueado.avanzarEspera()) {
+                colas.quitarBloqueado(bloqueado);
+                colas.agregarListo(bloqueado);
+                registrar("termina la E/S del proceso " + bloqueado + " (bloqueado -> listo)");
+            } else {
+                i++;
+            }
+            bloqueado = colas.obtenerBloqueado(i);
+        }
+    }
+
+    private void bloquearPorESSiCorresponde() {
+        PCB actual = cpu.getProcesoActual();
+        if (actual != null && actual.debePedirES()) {
+            cpu.liberar();
+            ciclosEnCpu = 0;
+            actual.iniciarES();
+            colas.agregarBloqueado(actual, MotivoBloqueo.ESPERA_ES);
+            registrar("bloquea el proceso " + actual + " por E/S durante "
+                    + actual.getDuracionES() + " ciclos (ejecucion -> bloqueado)");
         }
     }
 
@@ -78,6 +108,20 @@ public class NucleoSO implements ComponenteReloj {
                 i++;
             }
             listo = colas.obtenerListo(i);
+        }
+
+        int j = 0;
+        PCB bloqueado = colas.obtenerBloqueado(j);
+        while (bloqueado != null) {
+            bloqueado.decrementarDeadline();
+            if (bloqueado.deadlineVencido()) {
+                colas.quitarBloqueado(bloqueado);
+                finalizar(bloqueado, MotivoTerminacion.DEADLINE_VENCIDO, cicloGlobal);
+                registrar("vence deadline del proceso " + bloqueado + " en cola de bloqueados");
+            } else {
+                j++;
+            }
+            bloqueado = colas.obtenerBloqueado(j);
         }
     }
 

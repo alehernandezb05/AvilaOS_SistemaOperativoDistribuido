@@ -3,10 +3,6 @@ package edu.unimet.avilaos.so;
 import edu.unimet.avilaos.estructuras.Cola;
 import java.util.concurrent.Semaphore;
 
-/**
- * Las cuatro colas de un computador: nuevos, listos, bloqueados y terminados.
- * Un semaforo protege el acceso, porque lo usan varios hilos.
- */
 public class ColasSO {
 
     private final Cola<PCB> nuevos = new Cola<>();
@@ -66,10 +62,15 @@ public class ColasSO {
             mutex.release();
         }
     }
-    
+
     public boolean quitarListo(PCB proceso) {
-    return listos.remover(proceso);
-}
+        mutex.acquireUninterruptibly();
+        try {
+            return listos.remover(proceso);
+        } finally {
+            mutex.release();
+        }
+    }
 
     public boolean quitarBloqueado(PCB p) {
         mutex.acquireUninterruptibly();
@@ -80,12 +81,7 @@ public class ColasSO {
         }
     }
 
-    /** Devuelve el proceso nuevo en la posicion indicada, sin sacarlo (null si no existe). */
-    public PCB obtenerNuevo(int indice) {
-        return obtener(nuevos, indice);
-    }
-
-    // Lecturas para la GUI: no sacan el proceso de su cola
+    public PCB obtenerNuevo(int indice) { return obtener(nuevos, indice); }
     public PCB obtenerListo(int indice) { return obtener(listos, indice); }
     public PCB obtenerBloqueado(int indice) { return obtener(bloqueados, indice); }
     public PCB obtenerTerminado(int indice) { return obtener(terminados, indice); }
@@ -99,7 +95,6 @@ public class ColasSO {
         }
     }
 
-    /** Deja que la politica elija el siguiente proceso de la cola de listos. */
     public PCB seleccionarSiguiente(EstrategiaPlanificacion estrategia) {
         mutex.acquireUninterruptibly();
         try {
@@ -109,7 +104,6 @@ public class ColasSO {
         }
     }
 
-    /** Pregunta a la politica si el proceso en CPU debe ser expulsado. */
     public boolean debeExpropiar(EstrategiaPlanificacion estrategia, PCB enEjecucion, int ciclosEnCpu) {
         mutex.acquireUninterruptibly();
         try {
