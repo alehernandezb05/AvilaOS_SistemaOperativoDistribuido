@@ -37,6 +37,8 @@ public class NucleoSO implements ComponenteReloj {
         bloquearPorESSiCorresponde();
         procesarDeadlines(cicloGlobal);
         admitirNuevos();
+        // Despues de admitir: solo pierden deadline los que siguen esperando memoria
+        procesarDeadlinesNuevos(cicloGlobal);
         planificar();
         if (!cpu.estaLibre()) {
             ciclosEnCpu++;
@@ -286,6 +288,24 @@ public class NucleoSO implements ComponenteReloj {
                 i++;
             }
             p = colas.obtenerNuevo(i);
+        }
+    }
+
+    /** Vence el deadline de los procesos que no han sido admitidos. No liberan RAM porque nunca la reservaron. */
+    private void procesarDeadlinesNuevos(long cicloGlobal) {
+        int i = 0;
+        PCB nuevo = colas.obtenerNuevo(i);
+        while (nuevo != null) {
+            nuevo.decrementarDeadline();
+            if (nuevo.deadlineVencido()) {
+                colas.quitarNuevo(nuevo);
+                nuevo.terminar(MotivoTerminacion.DEADLINE_VENCIDO, cicloGlobal);
+                colas.agregarTerminado(nuevo);
+                registrar("vence deadline del proceso " + nuevo + " en cola de nuevos, sin haber sido admitido");
+            } else {
+                i++;
+            }
+            nuevo = colas.obtenerNuevo(i);
         }
     }
 
