@@ -18,6 +18,7 @@ import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.JSplitPane;
 import javax.swing.Timer;
+import javax.swing.JTabbedPane;
 
 /**
  * Ventana principal del simulador. Arriba los controles, al centro un panel por
@@ -34,6 +35,7 @@ public class VentanaPrincipal extends JFrame {
     private final PanelLog panelLog = new PanelLog();
     private final PanelBuffers panelBuffers = new PanelBuffers();
     private final PanelGraficoUtilizacion panelGrafico;
+    private final PanelMetricas panelMetricas;
     private final PanelComputador[] panelesComputador;
     private final Timer refresco;
     private final Consumer<Configuracion> alReiniciar;
@@ -66,11 +68,15 @@ public class VentanaPrincipal extends JFrame {
         }
 
         panelGrafico = new PanelGraficoUtilizacion(simulador);
+        panelMetricas = new PanelMetricas(simulador);
+        JTabbedPane pestanasIzquierda = new JTabbedPane();
+        pestanasIzquierda.addTab("Buffers", panelBuffers);
+        pestanasIzquierda.addTab("Metricas", panelMetricas);
 
         JSplitPane inferiorDerecha = new JSplitPane(JSplitPane.VERTICAL_SPLIT, panelLog, panelGrafico);
         inferiorDerecha.setResizeWeight(0.5);
 
-        JSplitPane inferior = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, panelBuffers, inferiorDerecha);
+        JSplitPane inferior = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, pestanasIzquierda, inferiorDerecha);
         inferior.setResizeWeight(0.4);
 
         JScrollPane scrollComputadores = new JScrollPane(computadores);
@@ -166,6 +172,7 @@ public class VentanaPrincipal extends JFrame {
         panelGrafico.actualizar();
         panelLog.actualizar(simulador.getLog());
         panelBuffers.actualizar(simulador.getBuffers());
+        panelMetricas.actualizar();
     }
 
     /** Abre el dialogo de crear proceso y lo envia al simulador. */
