@@ -2,6 +2,8 @@ package edu.unimet.avilaos.so;
 
 public class PCB {
 
+    private static final int PASOS_PROTOCOLO = 5;
+
     private static int contadorIds = 0;
 
     private static synchronized int siguienteId() {
@@ -40,6 +42,14 @@ public class PCB {
     private int elementosTotales;
     private int elementosProcesados;
 
+    private PasoProtocolo paso;
+    private int ciclosTrabajados;
+    private boolean conteoAdquirido;
+    private boolean mutexAdquirido;
+    private boolean accionHecha;
+    private boolean accesoPagado;
+    private Semaforo semaforoEsperado;
+
     public PCB(String nombre, int idComputador, TipoProceso tipo, int prioridad,
                int memoria, int totalInstrucciones, int deadline, long cicloCreacion) {
         this.id = siguienteId();
@@ -69,11 +79,26 @@ public class PCB {
         this.ciclosPorElemento = 0;
         this.elementosTotales = 0;
         this.elementosProcesados = 0;
+
+        this.paso = tipo == TipoProceso.CONSUMIDOR ? PasoProtocolo.ESPERAR_CONTEO : PasoProtocolo.TRABAJO;
+        this.ciclosTrabajados = 0;
+        this.conteoAdquirido = false;
+        this.mutexAdquirido = false;
+        this.accionHecha = false;
+        this.accesoPagado = false;
+        this.semaforoEsperado = null;
+    }
+
+    public boolean esProductorConsumidor() {
+        return tipo == TipoProceso.PRODUCTOR || tipo == TipoProceso.CONSUMIDOR;
     }
 
     public void ejecutarInstruccion() {
         programCounter++;
         mar++;
+        if (esProductorConsumidor()) {
+            return;
+        }
         tiempoRestante--;
         if (tipo == TipoProceso.IO_BOUND) {
             contadorCiclosES++;
@@ -91,6 +116,13 @@ public class PCB {
     }
 
     public boolean haTerminado() {
+        if (esProductorConsumidor()) {
+            boolean completo = elementosProcesados >= elementosTotales;
+            if (tipo == TipoProceso.PRODUCTOR) {
+                return completo && paso == PasoProtocolo.TRABAJO;
+            }
+            return completo && paso == PasoProtocolo.ESPERAR_CONTEO;
+        }
         return tiempoRestante <= 0;
     }
 
@@ -107,6 +139,10 @@ public class PCB {
         ciclosRestantesBloqueo = duracionES;
     }
 
+    public void iniciarEsperaRed(int ciclos) {
+        ciclosRestantesBloqueo = ciclos;
+    }
+
     public boolean avanzarEspera() {
         if (ciclosRestantesBloqueo > 0) {
             ciclosRestantesBloqueo--;
@@ -114,11 +150,71 @@ public class PCB {
         return ciclosRestantesBloqueo == 0;
     }
 
+    public boolean avanzarTrabajo() {
+        ciclosTrabajados++;
+        if (ciclosTrabajados >= ciclosPorElemento) {
+            ciclosTrabajados = 0;
+            return true;
+        }
+        return false;
+    }
+
+    public void siguientePaso() {
+        switch (paso) {
+            case TRABAJO -> paso = PasoProtocolo.ESPERAR_CONTEO;
+            case ESPERAR_CONTEO -> paso = PasoProtocolo.ESPERAR_MUTEX;
+            case ESPERAR_MUTEX -> paso = PasoProtocolo.ACCEDER_BUFFER;
+            case ACCEDER_BUFFER -> paso = PasoProtocolo.LIBERAR_MUTEX;
+            case LIBERAR_MUTEX -> paso = PasoProtocolo.LIBERAR_CONTEO;
+            case LIBERAR_CONTEO -> paso = PasoProtocolo.TRABAJO;
+        }
+    }
+
+    public void confirmarAdquisicion() {
+        if (paso == PasoProtocolo.ESPERAR_CONTEO) {
+            conteoAdquirido = true;
+        } else if (paso == PasoProtocolo.ESPERAR_MUTEX) {
+            mutexAdquirido = true;
+        }
+    }
+
+    public void confirmarEsperaCumplida() {
+        if (paso == PasoProtocolo.ESPERAR_MUTEX) {
+            conteoAdquirido = true;
+        } else if (paso == PasoProtocolo.ACCEDER_BUFFER) {
+            mutexAdquirido = true;
+        }
+        semaforoEsperado = null;
+    }
+
+    public void registrarAccion() {
+        accionHecha = true;
+        elementosProcesados++;
+        recalcularRestante();
+    }
+
+    public void finalizarElemento() {
+        conteoAdquirido = false;
+        mutexAdquirido = false;
+        accionHecha = false;
+        accesoPagado = false;
+        ciclosTrabajados = 0;
+        recalcularRestante();
+    }
+
+    private void recalcularRestante() {
+        if (esProductorConsumidor()) {
+            int faltan = Math.max(0, elementosTotales - elementosProcesados);
+            tiempoRestante = faltan * (ciclosPorElemento + PASOS_PROTOCOLO);
+        }
+    }
+
     public void terminar(MotivoTerminacion motivo, long ciclo) {
         this.motivoTerminacion = motivo;
         this.estado = EstadoProceso.TERMINADO;
         this.motivoBloqueo = null;
         this.ciclosRestantesBloqueo = 0;
+        this.semaforoEsperado = null;
         this.cicloFin = ciclo;
     }
 
@@ -156,6 +252,16 @@ public class PCB {
     public int getCiclosBloqueado() { return ciclosBloqueado; }
     public int getCiclosRestantesBloqueo() { return ciclosRestantesBloqueo; }
 
+    public PasoProtocolo getPaso() { return paso; }
+    public Semaforo getSemaforoEsperado() { return semaforoEsperado; }
+    public void setSemaforoEsperado(Semaforo semaforo) { this.semaforoEsperado = semaforo; }
+    public boolean isConteoAdquirido() { return conteoAdquirido; }
+    public boolean isMutexAdquirido() { return mutexAdquirido; }
+    public void setMutexAdquirido(boolean valor) { this.mutexAdquirido = valor; }
+    public boolean isAccionHecha() { return accionHecha; }
+    public boolean isAccesoPagado() { return accesoPagado; }
+    public void setAccesoPagado(boolean valor) { this.accesoPagado = valor; }
+
     public int getCiclosParaES() { return ciclosParaES; }
     public void setCiclosParaES(int ciclosParaES) {
         this.ciclosParaES = noNegativo(ciclosParaES, "ciclosParaES");
@@ -185,11 +291,13 @@ public class PCB {
             throw new IllegalArgumentException("ciclosPorElemento debe ser al menos 1 (vale " + ciclosPorElemento + ").");
         }
         this.ciclosPorElemento = ciclosPorElemento;
+        recalcularRestante();
     }
 
     public int getElementosTotales() { return elementosTotales; }
     public void setElementosTotales(int elementosTotales) {
         this.elementosTotales = noNegativo(elementosTotales, "elementosTotales");
+        recalcularRestante();
     }
 
     public int getElementosProcesados() { return elementosProcesados; }
@@ -199,6 +307,7 @@ public class PCB {
                     + " (vale " + elementosProcesados + ").");
         }
         this.elementosProcesados = elementosProcesados;
+        recalcularRestante();
     }
 
     private static int noNegativo(int valor, String campo) {
