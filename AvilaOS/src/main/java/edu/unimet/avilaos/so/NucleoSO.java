@@ -12,8 +12,8 @@ public class NucleoSO implements ComponenteReloj {
     private final ColasSO colas = new ColasSO();
     private volatile EstrategiaPlanificacion estrategia;
     private int ciclosEnCpu = 0;
-    private volatile Log log;               
-    private volatile long cicloActual = 0;  
+    private volatile Log log;
+    private volatile long cicloActual = 0;
 
     public NucleoSO(int idComputador, CPU cpu, RAM ram, EstrategiaPlanificacion estrategia) {
         this.idComputador = idComputador;
@@ -29,12 +29,28 @@ public class NucleoSO implements ComponenteReloj {
     @Override
     public void alCiclo(long cicloGlobal) {
         cicloActual = cicloGlobal;
-        procesarDeadlines(cicloGlobal);
         terminarSiCorresponde(cicloGlobal);
+        procesarDeadlines(cicloGlobal);
         admitirNuevos();
         planificar();
         if (!cpu.estaLibre()) {
             ciclosEnCpu++;
+        }
+    }
+
+    private void finalizar(PCB proceso, MotivoTerminacion motivo, long ciclo) {
+        ram.liberar(proceso.getMemoria());
+        proceso.terminar(motivo, ciclo);
+        colas.agregarTerminado(proceso);
+    }
+
+    private void terminarSiCorresponde(long cicloGlobal) {
+        PCB actual = cpu.getProcesoActual();
+        if (actual != null && actual.haTerminado()) {
+            cpu.liberar();
+            ciclosEnCpu = 0;
+            finalizar(actual, MotivoTerminacion.COMPLETADO, cicloGlobal);
+            registrar("termina el proceso " + actual + " y libera " + actual.getMemoria() + " de RAM");
         }
     }
 
@@ -44,11 +60,8 @@ public class NucleoSO implements ComponenteReloj {
             actual.decrementarDeadline();
             if (actual.deadlineVencido()) {
                 cpu.liberar();
-                ram.liberar(actual.getMemoria());
-                actual.setEstado(EstadoProceso.TERMINADO);
-                actual.setCicloFin(cicloGlobal);
-                colas.agregarTerminado(actual);
                 ciclosEnCpu = 0;
+                finalizar(actual, MotivoTerminacion.DEADLINE_VENCIDO, cicloGlobal);
                 registrar("termina el proceso " + actual + " por vencimiento de deadline");
             }
         }
@@ -59,27 +72,12 @@ public class NucleoSO implements ComponenteReloj {
             listo.decrementarDeadline();
             if (listo.deadlineVencido()) {
                 colas.quitarListo(listo);
-                ram.liberar(listo.getMemoria());
-                listo.setEstado(EstadoProceso.TERMINADO);
-                listo.setCicloFin(cicloGlobal);
-                colas.agregarTerminado(listo);
+                finalizar(listo, MotivoTerminacion.DEADLINE_VENCIDO, cicloGlobal);
                 registrar("vence deadline del proceso " + listo + " en cola de listos");
             } else {
                 i++;
             }
             listo = colas.obtenerListo(i);
-        }
-    }
-
-    private void terminarSiCorresponde(long cicloGlobal) {
-        PCB actual = cpu.getProcesoActual();
-        if (actual != null && actual.haTerminado()) {
-            cpu.liberar();
-            ram.liberar(actual.getMemoria());
-            actual.setCicloFin(cicloGlobal);
-            colas.agregarTerminado(actual);
-            ciclosEnCpu = 0;
-            registrar("termina el proceso " + actual + " y libera " + actual.getMemoria() + " de RAM");
         }
     }
 
@@ -111,6 +109,7 @@ public class NucleoSO implements ComponenteReloj {
             PCB siguiente = colas.seleccionarSiguiente(estrategia);
             if (siguiente != null) {
                 siguiente.setEstado(EstadoProceso.EJECUCION);
+                siguiente.registrarPrimeraEjecucion(cicloActual);
                 cpu.asignar(siguiente);
                 ciclosEnCpu = 0;
                 registrar("selecciona el proceso " + siguiente);
