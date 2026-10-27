@@ -29,6 +29,7 @@ public class PCB {
     private long cicloPrimeraEjecucion;
     private long cicloFin;
     private int ciclosBloqueado;
+    private int ciclosRestantesBloqueo;
 
     private int ciclosParaES;
     private int duracionES;
@@ -59,6 +60,7 @@ public class PCB {
         this.cicloPrimeraEjecucion = -1;
         this.cicloFin = -1;
         this.ciclosBloqueado = 0;
+        this.ciclosRestantesBloqueo = 0;
 
         this.ciclosParaES = 0;
         this.duracionES = 0;
@@ -73,6 +75,9 @@ public class PCB {
         programCounter++;
         mar++;
         tiempoRestante--;
+        if (tipo == TipoProceso.IO_BOUND) {
+            contadorCiclosES++;
+        }
     }
 
     public void decrementarDeadline() {
@@ -89,10 +94,31 @@ public class PCB {
         return tiempoRestante <= 0;
     }
 
+    public boolean debePedirES() {
+        return tipo == TipoProceso.IO_BOUND
+                && ciclosParaES > 0
+                && duracionES > 0
+                && contadorCiclosES >= ciclosParaES
+                && tiempoRestante > 0;
+    }
+
+    public void iniciarES() {
+        contadorCiclosES = 0;
+        ciclosRestantesBloqueo = duracionES;
+    }
+
+    public boolean avanzarEspera() {
+        if (ciclosRestantesBloqueo > 0) {
+            ciclosRestantesBloqueo--;
+        }
+        return ciclosRestantesBloqueo == 0;
+    }
+
     public void terminar(MotivoTerminacion motivo, long ciclo) {
         this.motivoTerminacion = motivo;
         this.estado = EstadoProceso.TERMINADO;
         this.motivoBloqueo = null;
+        this.ciclosRestantesBloqueo = 0;
         this.cicloFin = ciclo;
     }
 
@@ -128,6 +154,7 @@ public class PCB {
     public long getCicloPrimeraEjecucion() { return cicloPrimeraEjecucion; }
     public long getCicloFin() { return cicloFin; }
     public int getCiclosBloqueado() { return ciclosBloqueado; }
+    public int getCiclosRestantesBloqueo() { return ciclosRestantesBloqueo; }
 
     public int getCiclosParaES() { return ciclosParaES; }
     public void setCiclosParaES(int ciclosParaES) {
