@@ -32,6 +32,7 @@ public class PCB {
     private long cicloFin;
     private int ciclosBloqueado;
     private int ciclosRestantesBloqueo;
+    private int ciclosBloqueadoSemaforo;
 
     private int ciclosParaES;
     private int duracionES;
@@ -225,6 +226,9 @@ public class PCB {
     public void sumarCicloBloqueado() {
         ciclosBloqueado++;
     }
+        public void sumarCicloBloqueadoSemaforo() {
+        ciclosBloqueadoSemaforo++;
+    }
 
     public void registrarPrimeraEjecucion(long ciclo) {
         if (cicloPrimeraEjecucion < 0) {
@@ -250,6 +254,7 @@ public class PCB {
     public long getCicloPrimeraEjecucion() { return cicloPrimeraEjecucion; }
     public long getCicloFin() { return cicloFin; }
     public int getCiclosBloqueado() { return ciclosBloqueado; }
+    public int getCiclosBloqueadoSemaforo() { return ciclosBloqueadoSemaforo; }
     public int getCiclosRestantesBloqueo() { return ciclosRestantesBloqueo; }
 
     public PasoProtocolo getPaso() { return paso; }
