@@ -126,4 +126,27 @@ public class ColasSO {
             mutex.release();
         }
     }
+        public PCB[] copiaDeTodos() {
+        mutex.acquireUninterruptibly();
+        try {
+            int total = nuevos.getTamano() + listos.getTamano()
+                    + bloqueados.getTamano() + terminados.getTamano();
+            PCB[] copia = new PCB[total];
+            int k = copiar(nuevos, copia, 0);
+            k = copiar(listos, copia, k);
+            k = copiar(bloqueados, copia, k);
+            copiar(terminados, copia, k);
+            return copia;
+        } finally {
+            mutex.release();
+        }
+    }
+
+    private int copiar(Cola<PCB> cola, PCB[] destino, int desde) {
+        int n = cola.getTamano();
+        for (int i = 0; i < n; i++) {
+            destino[desde + i] = cola.obtener(i);
+        }
+        return desde + n;
+    }
 }
