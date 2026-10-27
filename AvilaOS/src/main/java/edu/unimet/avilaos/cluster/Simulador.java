@@ -11,12 +11,11 @@ import edu.unimet.avilaos.so.EstrategiaPlanificacion;
 import edu.unimet.avilaos.so.Log;
 import edu.unimet.avilaos.so.PCB;
 import edu.unimet.avilaos.so.PoliticaPlanificacion;
+import edu.unimet.avilaos.so.ServicioCluster;
 import edu.unimet.avilaos.so.politicas.EDF;
 import edu.unimet.avilaos.so.politicas.FCFS;
 import edu.unimet.avilaos.so.politicas.PrioridadesApropiativas;
 import edu.unimet.avilaos.so.politicas.RoundRobin;
-import edu.unimet.avilaos.so.ServicioCluster;
-
 
 /**
  * Arma el sistema distribuido: el reloj global y los computadores del cluster.
@@ -81,7 +80,6 @@ public class Simulador implements ServicioCluster {
         // Los IDs de los computadores empiezan en 1; todos comparten el mismo log global
         for (int i = 0; i < tamanosRam.length; i++) {
             computadores[i] = new Computador(i + 1, tamanosRam[i], crearEstrategia(politicas[i], quantum), reloj);
-            computadores[i].setLog(log);
             computadores[i].setLog(log);
             computadores[i].setServicio(this);
         }
@@ -177,10 +175,12 @@ public class Simulador implements ServicioCluster {
         }
         return new Configuracion(getDuracionCicloMs(), quantum, latenciaRed, datos, datosBuffers, procesos);
     }
-        @Override
+
+    @Override
     public void desbloquear(PCB proceso, long ciclo) {
         getComputador(proceso.getIdComputador()).getNucleo().desbloquear(proceso, ciclo);
     }
+
     public int getLatenciaRed() { return latenciaRed; }
 
     /**

@@ -126,7 +126,8 @@ public class ColasSO {
             mutex.release();
         }
     }
-        public PCB[] copiaDeTodos() {
+
+    public PCB[] copiaDeTodos() {
         mutex.acquireUninterruptibly();
         try {
             int total = nuevos.getTamano() + listos.getTamano()

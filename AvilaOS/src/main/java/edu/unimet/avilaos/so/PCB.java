@@ -226,7 +226,8 @@ public class PCB {
     public void sumarCicloBloqueado() {
         ciclosBloqueado++;
     }
-        public void sumarCicloBloqueadoSemaforo() {
+
+    public void sumarCicloBloqueadoSemaforo() {
         ciclosBloqueadoSemaforo++;
     }
 

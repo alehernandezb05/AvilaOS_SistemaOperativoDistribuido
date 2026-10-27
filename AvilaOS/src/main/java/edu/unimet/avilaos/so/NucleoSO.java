@@ -114,7 +114,7 @@ public class NucleoSO implements ComponenteReloj {
             bloqueado.sumarCicloBloqueado();
             MotivoBloqueo motivo = bloqueado.getMotivoBloqueo();
             if (motivo == MotivoBloqueo.ESPERA_SEMAFORO) {
-            bloqueado.sumarCicloBloqueadoSemaforo();
+                bloqueado.sumarCicloBloqueadoSemaforo();
             }
             boolean esperaTemporal = motivo == MotivoBloqueo.ESPERA_ES || motivo == MotivoBloqueo.ESPERA_RED;
             if (esperaTemporal && bloqueado.avanzarEspera()) {

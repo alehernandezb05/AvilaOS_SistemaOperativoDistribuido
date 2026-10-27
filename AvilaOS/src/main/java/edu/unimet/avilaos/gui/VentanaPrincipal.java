@@ -17,8 +17,8 @@ import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.JSplitPane;
-import javax.swing.Timer;
 import javax.swing.JTabbedPane;
+import javax.swing.Timer;
 
 /**
  * Ventana principal del simulador. Arriba los controles, al centro un panel por
