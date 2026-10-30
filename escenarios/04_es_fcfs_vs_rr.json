@@ -1,0 +1,20 @@
+{
+  "duracionCicloMs": 250,
+  "quantum": 3,
+  "latenciaRed": 0,
+  "computadores": [
+    { "ram": 128, "politica": "FCFS" },
+    { "ram": 128, "politica": "ROUND_ROBIN" }
+  ],
+  "buffers": [],
+  "procesos": [
+    { "nombre": "Largo", "computador": 1, "tipo": "CPU_BOUND", "prioridad": 3, "memoria": 16, "instrucciones": 30, "deadline": 200, "ciclosParaES": 0, "duracionES": 0, "idBuffer": null, "ciclosPorElemento": 0, "elementosTotales": 0 },
+    { "nombre": "ES1", "computador": 1, "tipo": "IO_BOUND", "prioridad": 3, "memoria": 16, "instrucciones": 8, "deadline": 45, "ciclosParaES": 2, "duracionES": 4, "idBuffer": null, "ciclosPorElemento": 0, "elementosTotales": 0 },
+    { "nombre": "ES2", "computador": 1, "tipo": "IO_BOUND", "prioridad": 3, "memoria": 16, "instrucciones": 8, "deadline": 45, "ciclosParaES": 2, "duracionES": 4, "idBuffer": null, "ciclosPorElemento": 0, "elementosTotales": 0 },
+    { "nombre": "ES3", "computador": 1, "tipo": "IO_BOUND", "prioridad": 3, "memoria": 16, "instrucciones": 8, "deadline": 45, "ciclosParaES": 2, "duracionES": 4, "idBuffer": null, "ciclosPorElemento": 0, "elementosTotales": 0 },
+    { "nombre": "Largo", "computador": 2, "tipo": "CPU_BOUND", "prioridad": 3, "memoria": 16, "instrucciones": 30, "deadline": 200, "ciclosParaES": 0, "duracionES": 0, "idBuffer": null, "ciclosPorElemento": 0, "elementosTotales": 0 },
+    { "nombre": "ES1", "computador": 2, "tipo": "IO_BOUND", "prioridad": 3, "memoria": 16, "instrucciones": 8, "deadline": 45, "ciclosParaES": 2, "duracionES": 4, "idBuffer": null, "ciclosPorElemento": 0, "elementosTotales": 0 },
+    { "nombre": "ES2", "computador": 2, "tipo": "IO_BOUND", "prioridad": 3, "memoria": 16, "instrucciones": 8, "deadline": 45, "ciclosParaES": 2, "duracionES": 4, "idBuffer": null, "ciclosPorElemento": 0, "elementosTotales": 0 },
+    { "nombre": "ES3", "computador": 2, "tipo": "IO_BOUND", "prioridad": 3, "memoria": 16, "instrucciones": 8, "deadline": 45, "ciclosParaES": 2, "duracionES": 4, "idBuffer": null, "ciclosPorElemento": 0, "elementosTotales": 0 }
+  ]
+}

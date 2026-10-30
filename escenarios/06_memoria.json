@@ -1,0 +1,22 @@
+{
+  "duracionCicloMs": 250,
+  "quantum": 3,
+  "latenciaRed": 0,
+  "computadores": [
+    { "ram": 64, "politica": "FCFS" },
+    { "ram": 64, "politica": "FCFS" }
+  ],
+  "buffers": [
+    { "capacidad": 16, "anfitrion": 2 }
+  ],
+  "procesos": [
+    { "nombre": "A", "computador": 1, "tipo": "CPU_BOUND", "prioridad": 3, "memoria": 32, "instrucciones": 10, "deadline": 100, "ciclosParaES": 0, "duracionES": 0, "idBuffer": null, "ciclosPorElemento": 0, "elementosTotales": 0 },
+    { "nombre": "B", "computador": 1, "tipo": "CPU_BOUND", "prioridad": 3, "memoria": 24, "instrucciones": 15, "deadline": 100, "ciclosParaES": 0, "duracionES": 0, "idBuffer": null, "ciclosPorElemento": 0, "elementosTotales": 0 },
+    { "nombre": "C", "computador": 1, "tipo": "CPU_BOUND", "prioridad": 3, "memoria": 40, "instrucciones": 8, "deadline": 100, "ciclosParaES": 0, "duracionES": 0, "idBuffer": null, "ciclosPorElemento": 0, "elementosTotales": 0 },
+    { "nombre": "D", "computador": 1, "tipo": "CPU_BOUND", "prioridad": 3, "memoria": 48, "instrucciones": 5, "deadline": 15, "ciclosParaES": 0, "duracionES": 0, "idBuffer": null, "ciclosPorElemento": 0, "elementosTotales": 0 },
+    { "nombre": "E", "computador": 1, "tipo": "CPU_BOUND", "prioridad": 3, "memoria": 80, "instrucciones": 5, "deadline": 50, "ciclosParaES": 0, "duracionES": 0, "idBuffer": null, "ciclosPorElemento": 0, "elementosTotales": 0 },
+    { "nombre": "Productor", "computador": 2, "tipo": "PRODUCTOR", "prioridad": 3, "memoria": 16, "instrucciones": 10, "deadline": 200, "ciclosParaES": 0, "duracionES": 0, "idBuffer": "B1", "ciclosPorElemento": 2, "elementosTotales": 6 },
+    { "nombre": "Consumidor", "computador": 2, "tipo": "CONSUMIDOR", "prioridad": 3, "memoria": 16, "instrucciones": 10, "deadline": 200, "ciclosParaES": 0, "duracionES": 0, "idBuffer": "B1", "ciclosPorElemento": 2, "elementosTotales": 6 },
+    { "nombre": "Tarea", "computador": 2, "tipo": "CPU_BOUND", "prioridad": 3, "memoria": 24, "instrucciones": 6, "deadline": 200, "ciclosParaES": 0, "duracionES": 0, "idBuffer": null, "ciclosPorElemento": 0, "elementosTotales": 0 }
+  ]
+}

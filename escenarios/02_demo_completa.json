@@ -1,0 +1,28 @@
+{
+  "duracionCicloMs": 250,
+  "quantum": 3,
+  "latenciaRed": 3,
+  "computadores": [
+    { "ram": 128, "politica": "FCFS" },
+    { "ram": 128, "politica": "ROUND_ROBIN" },
+    { "ram": 128, "politica": "EDF" },
+    { "ram": 64, "politica": "PRIORIDADES_APROPIATIVAS" }
+  ],
+  "buffers": [
+    { "capacidad": 3, "anfitrion": 1 }
+  ],
+  "procesos": [
+    { "nombre": "Descargador", "computador": 1, "tipo": "PRODUCTOR", "prioridad": 3, "memoria": 16, "instrucciones": 10, "deadline": 400, "ciclosParaES": 0, "duracionES": 0, "idBuffer": "B1", "ciclosPorElemento": 2, "elementosTotales": 8 },
+    { "nombre": "Compilador", "computador": 1, "tipo": "CPU_BOUND", "prioridad": 3, "memoria": 32, "instrucciones": 25, "deadline": 400, "ciclosParaES": 0, "duracionES": 0, "idBuffer": null, "ciclosPorElemento": 0, "elementosTotales": 0 },
+    { "nombre": "Reproductor", "computador": 2, "tipo": "CONSUMIDOR", "prioridad": 3, "memoria": 16, "instrucciones": 10, "deadline": 400, "ciclosParaES": 0, "duracionES": 0, "idBuffer": "B1", "ciclosPorElemento": 3, "elementosTotales": 8 },
+    { "nombre": "Editor", "computador": 2, "tipo": "CPU_BOUND", "prioridad": 3, "memoria": 16, "instrucciones": 12, "deadline": 300, "ciclosParaES": 0, "duracionES": 0, "idBuffer": null, "ciclosPorElemento": 0, "elementosTotales": 0 },
+    { "nombre": "Navegador", "computador": 2, "tipo": "CPU_BOUND", "prioridad": 3, "memoria": 16, "instrucciones": 12, "deadline": 300, "ciclosParaES": 0, "duracionES": 0, "idBuffer": null, "ciclosPorElemento": 0, "elementosTotales": 0 },
+    { "nombre": "Backup", "computador": 3, "tipo": "CPU_BOUND", "prioridad": 3, "memoria": 16, "instrucciones": 20, "deadline": 300, "ciclosParaES": 0, "duracionES": 0, "idBuffer": null, "ciclosPorElemento": 0, "elementosTotales": 0 },
+    { "nombre": "Videollamada", "computador": 3, "tipo": "CPU_BOUND", "prioridad": 3, "memoria": 16, "instrucciones": 8, "deadline": 40, "ciclosParaES": 0, "duracionES": 0, "idBuffer": null, "ciclosPorElemento": 0, "elementosTotales": 0 },
+    { "nombre": "Render", "computador": 3, "tipo": "CPU_BOUND", "prioridad": 3, "memoria": 32, "instrucciones": 40, "deadline": 30, "ciclosParaES": 0, "duracionES": 0, "idBuffer": null, "ciclosPorElemento": 0, "elementosTotales": 0 },
+    { "nombre": "Juego", "computador": 4, "tipo": "CPU_BOUND", "prioridad": 5, "memoria": 16, "instrucciones": 30, "deadline": 300, "ciclosParaES": 0, "duracionES": 0, "idBuffer": null, "ciclosPorElemento": 0, "elementosTotales": 0 },
+    { "nombre": "Antivirus", "computador": 4, "tipo": "IO_BOUND", "prioridad": 3, "memoria": 16, "instrucciones": 15, "deadline": 300, "ciclosParaES": 3, "duracionES": 4, "idBuffer": null, "ciclosPorElemento": 0, "elementosTotales": 0 },
+    { "nombre": "Sistema", "computador": 4, "tipo": "CPU_BOUND", "prioridad": 2, "memoria": 16, "instrucciones": 10, "deadline": 300, "ciclosParaES": 0, "duracionES": 0, "idBuffer": null, "ciclosPorElemento": 0, "elementosTotales": 0 },
+    { "nombre": "BaseDatos", "computador": 4, "tipo": "CPU_BOUND", "prioridad": 3, "memoria": 100, "instrucciones": 20, "deadline": 20, "ciclosParaES": 0, "duracionES": 0, "idBuffer": null, "ciclosPorElemento": 0, "elementosTotales": 0 }
+  ]
+}
