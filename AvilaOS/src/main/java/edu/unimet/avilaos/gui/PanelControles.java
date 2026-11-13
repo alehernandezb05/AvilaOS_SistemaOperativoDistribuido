@@ -1,5 +1,7 @@
 package edu.unimet.avilaos.gui;
 
+import edu.unimet.avilaos.config.Configuracion;
+
 import java.awt.Dimension;
 import java.awt.FlowLayout;
 import java.awt.event.ActionListener;
@@ -15,7 +17,7 @@ import javax.swing.SwingConstants;
 
 /**
  * Barra superior: ciclo global, iniciar/pausar, duracion del ciclo, quantum
- * y acciones para crear procesos y buffers. La ventana conecta cada control al Simulador.
+ * y acciones para crear procesos. La ventana conecta cada control al Simulador.
  */
 public class PanelControles extends JPanel {
 
@@ -24,9 +26,8 @@ public class PanelControles extends JPanel {
     private final JButton btnPausar = new JButton("Pausar");
     // Los spinners ya limitan tipo y rango de lo que se puede escribir
     private final JSpinner spnDuracionCiclo = new JSpinner(new SpinnerNumberModel(500, 50, 5000, 50));
-    private final JSpinner spnQuantum = new JSpinner(new SpinnerNumberModel(3, 1, 50, 1));
+    private final JSpinner spnQuantum = new JSpinner(new SpinnerNumberModel(3, Configuracion.MIN_QUANTUM, Configuracion.MAX_QUANTUM, 1));
     private final JButton btnCrearProceso = new JButton("Crear proceso");
-    private final JButton btnCrearBuffer = new JButton("Crear buffer");
     private final JButton btnGuardarConfig = new JButton("Guardar configuracion");
     private final JButton btnCargarConfig = new JButton("Cargar configuracion");
 
@@ -48,7 +49,6 @@ public class PanelControles extends JPanel {
         add(spnQuantum);
         add(separador());
         add(btnCrearProceso);
-        add(btnCrearBuffer);
         add(separador());
         add(btnGuardarConfig);
         add(btnCargarConfig);
@@ -89,10 +89,6 @@ public class PanelControles extends JPanel {
     /** La ventana decide que hacer al pulsar "Crear proceso". */
     public void alCrearProceso(ActionListener accion) {
         btnCrearProceso.addActionListener(accion);
-    }
-
-    public void alCrearBuffer(ActionListener accion) {
-        btnCrearBuffer.addActionListener(accion);
     }
 
     public void alGuardarConfiguracion(ActionListener accion) {

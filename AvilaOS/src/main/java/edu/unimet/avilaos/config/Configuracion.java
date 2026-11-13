@@ -1,23 +1,22 @@
 package edu.unimet.avilaos.config;
 
-import edu.unimet.avilaos.so.Buffer;
 import edu.unimet.avilaos.so.PoliticaPlanificacion;
 import edu.unimet.avilaos.so.TipoProceso;
 
 /**
  * Parametros con los que arranca una simulacion. Se guarda y se carga en JSON
  * (ver ArchivoConfiguracion). Usa arreglos en lugar de colecciones de Java.
- * Incluye la carga inicial de buffers y procesos: los buffers se crean en orden
- * y reciben B1, B2..., que son los IDs que usan sus productores y consumidores.
+ * El Proyecto 2 configura un unico computador y su carga inicial de procesos.
+ * Los datos de buffers se conservan para identificar y rechazar configuraciones antiguas.
  */
 public class Configuracion {
 
     // Rangos validos; la GUI puede usarlos para sus campos
-    public static final int MIN_COMPUTADORES = 2;
-    public static final int MAX_COMPUTADORES = 8;
+    public static final int MIN_COMPUTADORES = 1;
+    public static final int MAX_COMPUTADORES = 1;
     public static final int MIN_CICLO_MS = 50;
     public static final int MAX_CICLO_MS = 5000;
-    public static final int MIN_QUANTUM = 1;
+    public static final int MIN_QUANTUM = 0;
     public static final int MAX_QUANTUM = 50;
     public static final int MIN_LATENCIA = 0;
     public static final int MAX_LATENCIA = 100;
@@ -75,8 +74,7 @@ public class Configuracion {
 
     /** Configuracion inicial cuando el usuario no carga ningun archivo. */
     public static Configuracion porDefecto() {
-        return new Configuracion(500, 3, 2, new ConfigComputador[] {
-            new ConfigComputador(256, PoliticaPlanificacion.FCFS),
+        return new Configuracion(500, 3, 0, new ConfigComputador[] {
             new ConfigComputador(256, PoliticaPlanificacion.FCFS)
         });
     }
@@ -100,56 +98,24 @@ public class Configuracion {
             if (c.politica == null) {
                 throw new ConfiguracionInvalidaException("La politica del computador " + (i + 1) + " no es valida.");
             }
+            if (c.politica == PoliticaPlanificacion.ROUND_ROBIN && quantum == 0) {
+                throw new ConfiguracionInvalidaException("Round Robin necesita un quantum mayor a 0.");
+            }
         }
-        validarBuffers();
+        if (getBuffers().length > 0) {
+            throw new ConfiguracionInvalidaException("El Proyecto 2 no carga buffers de productor-consumidor. "
+                    + "Usa una configuracion de un computador sin buffers.");
+        }
         ConfigProceso[] lista = getProcesos();
-        int cantidadBuffers = getBuffers().length;
         for (int i = 0; i < lista.length; i++) {
             if (lista[i] == null) {
                 throw new ConfiguracionInvalidaException("Faltan los datos del proceso " + (i + 1) + ".");
             }
             lista[i].validar(i + 1, computadores.length);
-            // Productores y consumidores deben usar un buffer de esta misma configuracion
             if (lista[i].getTipo() == TipoProceso.PRODUCTOR || lista[i].getTipo() == TipoProceso.CONSUMIDOR) {
-                int numero = numeroDeBuffer(lista[i].getIdBuffer());
-                if (numero < 1 || numero > cantidadBuffers) {
-                    throw new ConfiguracionInvalidaException("El proceso " + (i + 1) + " (" + lista[i].getNombre()
-                            + ") usa el buffer " + lista[i].getIdBuffer() + ", que no esta en la configuracion.");
-                }
+                throw new ConfiguracionInvalidaException("El Proyecto 2 usa procesos CPU_BOUND e IO_BOUND, "
+                        + "sin productores ni consumidores.");
             }
-        }
-    }
-
-    // Revisa capacidad y anfitrion de cada buffer y que la RAM de los buffers quepa en cada computador
-    private void validarBuffers() throws ConfiguracionInvalidaException {
-        ConfigBuffer[] lista = getBuffers();
-        int[] ramDeBuffers = new int[computadores.length];
-        for (int i = 0; i < lista.length; i++) {
-            ConfigBuffer b = lista[i];
-            if (b == null) {
-                throw new ConfiguracionInvalidaException("Faltan los datos del buffer B" + (i + 1) + ".");
-            }
-            verificarRango("La capacidad del buffer B" + (i + 1), b.capacidad, Buffer.MIN_CAPACIDAD, Buffer.MAX_CAPACIDAD);
-            verificarRango("El anfitrion del buffer B" + (i + 1), b.anfitrion, 1, computadores.length);
-            ramDeBuffers[b.anfitrion - 1] += b.capacidad * Buffer.MEMORIA_POR_ELEMENTO;
-        }
-        for (int i = 0; i < computadores.length; i++) {
-            if (ramDeBuffers[i] > computadores[i].ram) {
-                throw new ConfiguracionInvalidaException("Los buffers del computador " + (i + 1) + " ocupan "
-                        + ramDeBuffers[i] + " de RAM y solo tiene " + computadores[i].ram + ".");
-            }
-        }
-    }
-
-    // "B3" -> 3; cualquier otro texto -> -1
-    private static int numeroDeBuffer(String id) {
-        if (id == null || id.length() < 2 || id.charAt(0) != 'B') {
-            return -1;
-        }
-        try {
-            return Integer.parseInt(id.substring(1));
-        } catch (NumberFormatException e) {
-            return -1;
         }
     }
 

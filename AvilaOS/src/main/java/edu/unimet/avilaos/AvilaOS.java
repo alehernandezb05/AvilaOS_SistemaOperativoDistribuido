@@ -24,7 +24,7 @@ public class AvilaOS {
             } catch (Exception e) {
                 // Si falla se queda el look and feel por defecto de Swing
             }
-            // Primero se configura el cluster; si el usuario sale, el programa termina
+            // Primero se configura el computador; si el usuario sale, el programa termina
             DialogoConfiguracionInicial dialogo = new DialogoConfiguracionInicial(Configuracion.porDefecto());
             dialogo.setVisible(true);
             Configuracion config = dialogo.getConfiguracion();
