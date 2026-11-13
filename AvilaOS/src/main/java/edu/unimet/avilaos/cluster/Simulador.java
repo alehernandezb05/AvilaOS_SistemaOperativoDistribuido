@@ -23,7 +23,7 @@ import edu.unimet.avilaos.so.politicas.RoundRobin;
  */
 public class Simulador implements ServicioCluster {
 
-    public static final int MIN_COMPUTADORES = 2;
+    public static final int MIN_COMPUTADORES = 1;
 
     private final Reloj reloj;
     private final Computador[] computadores;
@@ -61,14 +61,14 @@ public class Simulador implements ServicioCluster {
      */
     public Simulador(int duracionCicloMs, int quantum, int latenciaRed, int[] tamanosRam,
                      PoliticaPlanificacion[] politicas) {
-        if (tamanosRam.length < MIN_COMPUTADORES) {
-            throw new IllegalArgumentException("Se necesitan al menos " + MIN_COMPUTADORES + " computadores.");
+        if (tamanosRam.length != MIN_COMPUTADORES) {
+            throw new IllegalArgumentException("El Proyecto 2 requiere exactamente un computador.");
         }
         if (politicas.length != tamanosRam.length) {
             throw new IllegalArgumentException("Debe haber una politica por computador.");
         }
-        if (quantum <= 0) {
-            throw new IllegalArgumentException("El quantum debe ser mayor a 0.");
+        if (quantum < Configuracion.MIN_QUANTUM || quantum > Configuracion.MAX_QUANTUM) {
+            throw new IllegalArgumentException("El quantum debe estar entre 0 y " + Configuracion.MAX_QUANTUM + ".");
         }
         if (latenciaRed < 0) {
             throw new IllegalArgumentException("La latencia de red no puede ser negativa.");
@@ -128,8 +128,12 @@ public class Simulador implements ServicioCluster {
 
     /** Cambia el quantum en caliente; afecta a los computadores que ya usan Round Robin. */
     public void setQuantum(int quantum) {
-        if (quantum <= 0) {
-            return;
+        if (quantum < Configuracion.MIN_QUANTUM || quantum > Configuracion.MAX_QUANTUM) {
+            throw new IllegalArgumentException("El quantum debe estar entre 0 y " + Configuracion.MAX_QUANTUM + ".");
+        }
+        if (quantum == 0 && computadores[0].getNucleo().getEstrategia().getPolitica()
+                == PoliticaPlanificacion.ROUND_ROBIN) {
+            throw new IllegalArgumentException("Round Robin necesita un quantum mayor a 0.");
         }
         this.quantum = quantum;
         for (Computador c : computadores) {

@@ -7,7 +7,6 @@ import edu.unimet.avilaos.config.ConfiguracionInvalidaException;
 import edu.unimet.avilaos.so.PCB;
 import java.awt.BorderLayout;
 import java.awt.Dimension;
-import java.awt.GridLayout;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -21,22 +20,19 @@ import javax.swing.JTabbedPane;
 import javax.swing.Timer;
 
 /**
- * Ventana principal del simulador. Arriba los controles, al centro un panel por
- * computador y abajo los buffers, el log y el grafico de utilizacion.
+ * Ventana del computador: controles, CPU/RAM, metricas, log y grafico de utilizacion.
  */
 public class VentanaPrincipal extends JFrame {
 
     public static final int REFRESCO_MS = 150;
-    public static final int COLUMNAS_COMPUTADORES = 2;
     public static final int ALTO_PANEL_COMPUTADOR = 380;
 
     private final Simulador simulador;
     private final PanelControles panelControles = new PanelControles();
     private final PanelLog panelLog = new PanelLog();
-    private final PanelBuffers panelBuffers = new PanelBuffers();
     private final PanelGraficoUtilizacion panelGrafico;
     private final PanelMetricas panelMetricas;
-    private final PanelComputador[] panelesComputador;
+    private final PanelComputador panelComputador;
     private final Timer refresco;
     private final Consumer<Configuracion> alReiniciar;
 
@@ -45,7 +41,7 @@ public class VentanaPrincipal extends JFrame {
      *                    crea un Simulador nuevo con ella y cierra esta ventana
      */
     public VentanaPrincipal(Simulador simulador, Consumer<Configuracion> alReiniciar) {
-        super("AvilaOS - Simulador de sistema operativo distribuido");
+        super("AvilaOS - Proyecto 2");
         this.simulador = simulador;
         this.alReiniciar = alReiniciar;
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
@@ -54,23 +50,20 @@ public class VentanaPrincipal extends JFrame {
         add(panelControles, BorderLayout.NORTH);
         conectarControles();
 
-        int cantidad = simulador.getCantidadComputadores();
-        panelesComputador = new PanelComputador[cantidad];
-        // Dos computadores por fila; si no caben en la ventana aparece el scroll vertical
-        JPanel computadores = new JPanel(new GridLayout(0, COLUMNAS_COMPUTADORES, 5, 5));
-        for (int i = 0; i < cantidad; i++) {
-            int id = i + 1;
-            panelesComputador[i] = new PanelComputador(simulador.getComputador(id));
-            panelesComputador[i].setPreferredSize(new Dimension(300, ALTO_PANEL_COMPUTADOR));
-            // Cada computador cambia su politica de forma independiente
-            panelesComputador[i].alCambiarPolitica(p -> simulador.cambiarPolitica(id, p));
-            computadores.add(panelesComputador[i]);
-        }
+        panelComputador = new PanelComputador(simulador.getComputador(1));
+        panelComputador.setPreferredSize(new Dimension(900, ALTO_PANEL_COMPUTADOR));
+        panelComputador.alCambiarPolitica(p -> {
+            try {
+                simulador.cambiarPolitica(1, p);
+            } catch (IllegalArgumentException e) {
+                error(e.getMessage());
+                panelComputador.actualizar();
+            }
+        });
 
         panelGrafico = new PanelGraficoUtilizacion(simulador);
         panelMetricas = new PanelMetricas(simulador);
         JTabbedPane pestanasIzquierda = new JTabbedPane();
-        pestanasIzquierda.addTab("Buffers", panelBuffers);
         pestanasIzquierda.addTab("Metricas", panelMetricas);
 
         JSplitPane inferiorDerecha = new JSplitPane(JSplitPane.VERTICAL_SPLIT, panelLog, panelGrafico);
@@ -79,7 +72,7 @@ public class VentanaPrincipal extends JFrame {
         JSplitPane inferior = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, pestanasIzquierda, inferiorDerecha);
         inferior.setResizeWeight(0.4);
 
-        JScrollPane scrollComputadores = new JScrollPane(computadores);
+        JScrollPane scrollComputadores = new JScrollPane(panelComputador);
         scrollComputadores.getVerticalScrollBar().setUnitIncrement(16);
         JSplitPane principal = new JSplitPane(JSplitPane.VERTICAL_SPLIT, scrollComputadores, inferior);
         principal.setResizeWeight(0.6);
@@ -99,14 +92,20 @@ public class VentanaPrincipal extends JFrame {
         panelControles.alIniciar(e -> simulador.iniciar());
         panelControles.alPausar(e -> simulador.pausar());
         panelControles.alCambiarDuracionCiclo(simulador::setDuracionCicloMs);
-        panelControles.alCambiarQuantum(simulador::setQuantum);
+        panelControles.alCambiarQuantum(q -> {
+            try {
+                simulador.setQuantum(q);
+            } catch (IllegalArgumentException e) {
+                error(e.getMessage());
+                panelControles.setValores(simulador.getDuracionCicloMs(), simulador.getQuantum());
+            }
+        });
         panelControles.alCrearProceso(e -> abrirDialogoCrearProceso());
-        panelControles.alCrearBuffer(e -> new DialogoCrearBuffer(this, simulador).setVisible(true));
         panelControles.alGuardarConfiguracion(e -> guardarConfiguracion());
         panelControles.alCargarConfiguracion(e -> cargarConfiguracion());
     }
 
-    /** Guarda en un JSON los parametros actuales del cluster. */
+    /** Guarda en un JSON los parametros actuales del computador. */
     private void guardarConfiguracion() {
         Path archivo = SelectorArchivoJson.elegirParaGuardar(this);
         if (archivo == null) {
@@ -166,20 +165,15 @@ public class VentanaPrincipal extends JFrame {
     private void actualizar() {
         panelControles.setCiclo(simulador.getCicloActual());
         panelControles.setCorriendo(simulador.estaCorriendo());
-        for (PanelComputador panel : panelesComputador) {
-            panel.actualizar();
-        }
+        panelComputador.actualizar();
         panelGrafico.actualizar();
         panelLog.actualizar(simulador.getLog());
-        panelBuffers.actualizar(simulador.getBuffers());
         panelMetricas.actualizar();
     }
 
     /** Abre el dialogo de crear proceso y lo envia al simulador. */
     private void abrirDialogoCrearProceso() {
-        // Sin buffers creados, productores y consumidores avisan que hay que crear uno
-        DialogoCrearProceso dialogo = new DialogoCrearProceso(this,
-                simulador.getCantidadComputadores(), simulador.getCicloActual(), simulador.getIdsBuffers());
+        DialogoCrearProceso dialogo = new DialogoCrearProceso(this, simulador.getCicloActual());
         dialogo.setVisible(true);
         PCB proceso = dialogo.getProcesoCreado();
         if (proceso != null) {

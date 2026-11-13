@@ -1,0 +1,13 @@
+{
+  "duracionCicloMs": 100,
+  "quantum": 0,
+  "latenciaRed": 0,
+  "computadores": [
+    { "ram": 64, "politica": "FCFS" }
+  ],
+  "procesos": [
+    { "nombre": "CPU", "computador": 1, "tipo": "CPU_BOUND", "prioridad": 3, "memoria": 16, "instrucciones": 12, "deadline": 100 },
+    { "nombre": "EntradaSalida", "computador": 1, "tipo": "IO_BOUND", "prioridad": 2, "memoria": 24, "instrucciones": 6, "deadline": 100, "ciclosParaES": 2, "duracionES": 3 },
+    { "nombre": "NoCabe", "computador": 1, "tipo": "CPU_BOUND", "prioridad": 5, "memoria": 80, "instrucciones": 2, "deadline": 20 }
+  ]
+}
