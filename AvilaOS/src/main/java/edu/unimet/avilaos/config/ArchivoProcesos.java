@@ -69,7 +69,9 @@ final class ArchivoProcesos {
             default -> throw new IllegalArgumentException("operation debe ser CREATE, READ, UPDATE o DELETE.");
         };
         OperacionArchivo operacion = new OperacionArchivo(tipo, texto(entrada, "targetPath"),
-                textoOpcional(entrada, "requester"), enteroOpcional(entrada, "fileSizeBlocks", 0),
+                textoOpcional(entrada, "requester"), tipo == DiskOperation.CREATE
+                        ? entero(entrada.get("fileSizeBlocks"), "fileSizeBlocks")
+                        : enteroOpcional(entrada, "fileSizeBlocks", 0),
                 textoOpcional(entrada, "newName"));
         return ConfigProceso.deArchivo(texto(entrada, "name"), enteroOpcional(entrada, "priority", 1),
                 entero(entrada.get("memory"), "memory"), entero(entrada.get("instructions"), "instructions"),

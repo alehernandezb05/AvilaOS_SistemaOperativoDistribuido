@@ -16,6 +16,7 @@ public class DiskMapPanel extends JPanel {
 
     static final Color COLOR_ARCHIVO = new Color(239, 154, 154);
     private DiskScheduler diskScheduler;
+    private DiskBlock[] bloquesObservados;
     private static final int BLOCK_SIZE = 14;
     private static final int BLOCK_MARGIN = 2;
     private static final int BLOCK_STEP = BLOCK_SIZE + BLOCK_MARGIN;
@@ -31,7 +32,17 @@ public class DiskMapPanel extends JPanel {
 
     public void setDiskScheduler(DiskScheduler diskScheduler) {
         this.diskScheduler = diskScheduler;
+        bloquesObservados = null;
         repaint();
+    }
+
+    void mostrarBloques(DiskBlock[] bloques) {
+        bloquesObservados = bloques;
+        repaint();
+    }
+
+    private DiskBlock[] bloquesVisibles() {
+        return bloquesObservados == null ? diskScheduler.getBlocks() : bloquesObservados;
     }
 
     @Override
@@ -43,7 +54,7 @@ public class DiskMapPanel extends JPanel {
             return;
         }
 
-        DiskBlock[] blocks = diskScheduler.getBlocks();
+        DiskBlock[] blocks = bloquesVisibles();
         int currentHead = diskScheduler.getCurrentHead();
         int totalBlocks = blocks.length;
 
@@ -91,7 +102,7 @@ public class DiskMapPanel extends JPanel {
         if (diskScheduler == null || x < 0 || y < 0 || x / BLOCK_STEP >= cols
                 || x % BLOCK_STEP >= BLOCK_SIZE || y % BLOCK_STEP >= BLOCK_SIZE) return null;
         int position = y / BLOCK_STEP * cols + x / BLOCK_STEP;
-        DiskBlock[] blocks = diskScheduler.getBlocks();
+        DiskBlock[] blocks = bloquesVisibles();
         if (position >= blocks.length) return null;
         DiskBlock block = blocks[position];
         String content = switch (block.contentType()) {

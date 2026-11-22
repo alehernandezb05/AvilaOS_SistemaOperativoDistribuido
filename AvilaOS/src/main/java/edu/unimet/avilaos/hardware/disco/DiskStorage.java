@@ -25,10 +25,24 @@ public final class DiskStorage {
     }
 
     private final DiskBlock[] blocks;
+    private final FileReservation[] fileReservations;
     private final Semaphore mutex = new Semaphore(1);
+
+    public static final class FileReservation {
+        private final String filePath;
+        private final int[] chain;
+
+        private FileReservation(String filePath, int[] chain) {
+            this.filePath = filePath;
+            this.chain = chain;
+        }
+
+        public int[] blockNumbers() { return chain.clone(); }
+    }
 
     DiskStorage(int totalBlocks, int swapSize, InitialFile[] initialFiles) {
         blocks = new DiskBlock[totalBlocks];
+        fileReservations = new FileReservation[totalBlocks];
         for (int i = 0; i < blocks.length; i++) blocks[i] = emptyBlock(i, DiskBlockType.FREE);
         if (initialFiles == null) throw new IllegalArgumentException("Faltan los archivos iniciales.");
         for (InitialFile file : initialFiles) {
@@ -77,6 +91,38 @@ public final class DiskStorage {
             int[] chain = findAvailableBlocks(DiskBlockType.FREE, count);
             writeFileChain(filePath, chain);
             return chain;
+        } finally {
+            mutex.release();
+        }
+    }
+
+    /** Reserva posiciones para la E/S sin publicarlas en el mapa de archivos. */
+    public FileReservation reserveFile(String filePath, int count) {
+        validatePath(filePath);
+        validateCount(count);
+        mutex.acquireUninterruptibly();
+        try {
+            requireNewFile(filePath);
+            int[] chain = findAvailableBlocks(DiskBlockType.FREE, count);
+            if (chain.length == 0) throw new IllegalArgumentException("Espacio insuficiente para " + filePath + ".");
+            FileReservation reservation = new FileReservation(filePath, chain);
+            for (int block : chain) fileReservations[block] = reservation;
+            return reservation;
+        } finally {
+            mutex.release();
+        }
+    }
+
+    public void finishFileReservation(FileReservation reservation, boolean commit) {
+        mutex.acquireUninterruptibly();
+        try {
+            int first = reservation.chain[0];
+            if (first >= blocks.length || fileReservations[first] != reservation) {
+                if (!commit) return;
+                throw new IllegalArgumentException("La reserva de " + reservation.filePath + " ya no está activa.");
+            }
+            if (commit) writeFileChain(reservation.filePath, reservation.chain);
+            for (int block : reservation.chain) fileReservations[block] = null;
         } finally {
             mutex.release();
         }
@@ -143,7 +189,7 @@ public final class DiskStorage {
         int[] positions = new int[count];
         int found = 0;
         for (int i = 0; i < blocks.length && found < count; i++) {
-            if (blocks[i].contentType() == type) positions[found++] = i;
+            if (blocks[i].contentType() == type && fileReservations[i] == null) positions[found++] = i;
         }
         return found == count ? positions : new int[0];
     }
@@ -185,6 +231,11 @@ public final class DiskStorage {
     private void requireNewFile(String filePath) {
         if (countFileBlocks(filePath) != 0) {
             throw new IllegalArgumentException("El archivo ya tiene bloques: " + filePath);
+        }
+        for (FileReservation reservation : fileReservations) {
+            if (reservation != null && reservation.filePath.equals(filePath)) {
+                throw new IllegalArgumentException("Ya hay una creación pendiente para " + filePath + ".");
+            }
         }
     }
 

@@ -22,7 +22,7 @@ public class CScanDiskSchedulerPolicy implements IDiskSchedulerPolicy {
 
         for (int i = 0; i < queue.getTamano(); i++) {
             DiskRequest req = queue.obtener(i);
-            int block = req.getBlockNumber();
+            int block = req.schedulingBlock(currentHead);
             if (block >= currentHead) {
                 int distance = block - currentHead;
                 if (distance < minDistance) {
