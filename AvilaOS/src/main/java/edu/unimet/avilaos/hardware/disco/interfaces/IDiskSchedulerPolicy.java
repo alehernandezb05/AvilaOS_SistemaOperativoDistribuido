@@ -16,5 +16,10 @@ public interface IDiskSchedulerPolicy {
         return null;
     }
 
-    record Sweep(int targetBlock, DiskDirection directionOnArrival) { }
+    /** returnBlock >= 0 indica un retorno circular tras alcanzar el objetivo. */
+    record Sweep(int targetBlock, DiskDirection directionOnArrival, int returnBlock) {
+        public Sweep(int targetBlock, DiskDirection directionOnArrival) {
+            this(targetBlock, directionOnArrival, -1);
+        }
+    }
 }
