@@ -1,6 +1,11 @@
 package edu.unimet.avilaos;
 
 import com.google.gson.Gson;
+import edu.unimet.avilaos.hardware.disco.DiskBlock;
+import edu.unimet.avilaos.hardware.disco.DiskStorage;
+import edu.unimet.avilaos.hardware.disco.DiskStorage.InitialFile;
+import edu.unimet.avilaos.hardware.disco.enums.DiskBlockType;
+import java.util.Arrays;
 import edu.unimet.avilaos.cluster.Simulador;
 import edu.unimet.avilaos.config.Configuracion;
 import edu.unimet.avilaos.config.ConfigDisco;
@@ -53,6 +58,8 @@ public final class PruebaDisco {
         pausaCompartida();
         interrupcion();
         configuracion();
+        asignacionEncadenada();
+        reservaSwap();
     }
 
     private static void transferencia() {
@@ -250,7 +257,7 @@ public final class PruebaDisco {
         disk.addRequest(request);
         comprobar(request.getArrivalCycle() == 4, "Llegada medida con el reloj del disco.");
         disk.getPendingRequests()[0] = null;
-        disk.getBlocks()[50].setOccupied(true);
+        disk.getBlocks()[50] = null;
         comprobar(!disk.getBlocks()[50].isOccupied(), "La vista no puede mutar los bloques.");
         invalido(() -> disk.addRequest(request));
         invalido(() -> new DiskScheduler(200, 0, 0, DiskPolicy.FIFO).addRequest(request));
@@ -359,6 +366,92 @@ public final class PruebaDisco {
         try { old.validar(); throw new AssertionError("Debe rechazar el cabezal fuera del disco."); }
         catch (edu.unimet.avilaos.config.ConfiguracionInvalidaException expected) { }
         System.out.println("OK: JSON anterior compatible y parametros de disco conservados.");
+    }
+
+    private static void asignacionEncadenada() {
+        int[] initialChain = {5, 3, 8};
+        InitialFile file = new InitialFile("/precargado", initialChain);
+        initialChain[0] = 0;
+        DiskScheduler disk = diskWithFiles(9, 2, file);
+        DiskStorage storage = disk.getStorage();
+        comprobar(Arrays.equals(storage.getFileChain("/precargado", 5), new int[] {5, 3, 8}),
+                "Una cadena precargada conserva incluso los enlaces descendentes.");
+
+        DiskBlock[] before = disk.getBlocks();
+        comprobar(storage.allocateFile("/grande", 5).length == 0 && Arrays.equals(before, disk.getBlocks()),
+                "La falta de espacio no publica una cadena parcial.");
+        int[] chain = storage.allocateFile("/nuevo", 4);
+        comprobar(Arrays.equals(chain, new int[] {2, 4, 6, 7}), "Se deben aprovechar los bloques no contiguos.");
+        DiskBlock[] full = disk.getBlocks();
+        comprobar(full[2].nextBlock() == 4 && full[4].nextBlock() == 6
+                && full[6].nextBlock() == 7 && full[7].nextBlock() == DiskBlock.END_OF_CHAIN,
+                "Cada bloque debe apuntar al siguiente o al fin de cadena.");
+        chain[0] = 8;
+        comprobar(storage.getFileChain("/nuevo", 2)[0] == 2, "El resultado no puede modificar la cadena.");
+        comprobar(storage.allocateFile("/extra", 1).length == 0, "El espacio de archivos está lleno.");
+        invalido(() -> storage.allocateFile("/nuevo", 1));
+        invalido(() -> storage.releaseFile("/nuevo", 4));
+        invalido(() -> storage.releaseFile("/nuevo", 5));
+        comprobar(Arrays.equals(full, disk.getBlocks()), "Una cadena inválida no libera ningún bloque.");
+        storage.releaseFile("/nuevo", 2);
+        comprobar(Arrays.equals(before, disk.getBlocks()), "Eliminar debe liberar solo la cadena pedida.");
+        comprobar(Arrays.equals(storage.allocateFile("/reutilizado", 4), new int[] {2, 4, 6, 7}),
+                "Los bloques liberados deben volver a estar disponibles.");
+
+        invalido(() -> diskWithFiles(9, 2, new InitialFile("/ciclo", 3, 5, 3)));
+        invalido(() -> diskWithFiles(9, 2, new InitialFile("/fuera", 4, 9)));
+        invalido(() -> diskWithFiles(9, 2, new InitialFile("/fuera", 4, -1)));
+        invalido(() -> diskWithFiles(9, 2, new InitialFile("/uno", 3), new InitialFile("/dos", 3)));
+        invalido(() -> diskWithFiles(9, 2, new InitialFile("/uno", 3), new InitialFile("/uno", 4)));
+        invalido(() -> diskWithFiles(2, 2, new InitialFile("/archivo", 0)));
+        System.out.println("OK: cadenas fragmentadas, falta de espacio, liberación y enlaces inválidos.");
+    }
+
+    private static void reservaSwap() {
+        InitialFile[] files = {
+            new InitialFile("/sistema/boot.bin", 11), new InitialFile("/usuarios/notas.txt", 34),
+            new InitialFile("/sistema/script.py", 62), new InitialFile("/sistema/core.dll", 64),
+            new InitialFile("/sistema/config.sys", 95), new InitialFile("/usuarios/img1.png", 119),
+            new InitialFile("/usuarios/data.csv", 123), new InitialFile("/usuarios/video.mp4", 180)
+        };
+        DiskScheduler disk = diskWithFiles(200, 100, files);
+        DiskStorage storage = disk.getStorage();
+        DiskBlock[] reserved = disk.getBlocks();
+        int count = 0;
+        for (DiskBlock block : reserved) {
+            if (block.contentType() == DiskBlockType.SWAP_RESERVED) count++;
+        }
+        comprobar(count == 100, "El ejemplo debe reservar exactamente 100 bloques.");
+        for (InitialFile file : files) {
+            DiskBlock block = reserved[file.blockNumbers()[0]];
+            comprobar(block.contentType() == DiskBlockType.FILE && file.filePath().equals(block.filePath()),
+                    "La reserva debe respetar " + file.filePath());
+        }
+
+        int[] first = storage.allocateSwap(1, 99);
+        int[] second = storage.allocateSwap(2, 1);
+        comprobar(first.length == 99 && second.length == 1, "Swap debe usar toda su capacidad disponible.");
+        DiskBlock[] full = disk.getBlocks();
+        for (int position : first) {
+            comprobar(reserved[position].contentType() == DiskBlockType.SWAP_RESERVED
+                    && full[position].contentType() == DiskBlockType.SWAP_OCCUPIED
+                    && full[position].processId() == 1, "Cada bloque ocupado identifica al PCB.");
+        }
+        comprobar(full[second[0]].processId() == 2, "Dos PCB no pueden ocupar el mismo bloque.");
+        invalido(() -> storage.allocateSwap(1, 1));
+        comprobar(storage.allocateSwap(3, 1).length == 0 && Arrays.equals(full, disk.getBlocks()),
+                "Swap lleno no debe ocupar bloques de archivos ni modificar asignaciones.");
+        storage.releaseSwap(1);
+        comprobar(disk.getBlocks()[second[0]].processId() == 2, "Liberar un PCB conserva el swap del otro.");
+        comprobar(Arrays.equals(first, storage.allocateSwap(3, 99)), "El swap se puede reutilizar.");
+        storage.releaseSwap(2);
+        storage.releaseSwap(3);
+        comprobar(Arrays.equals(reserved, disk.getBlocks()), "Liberar swap mantiene los bloques reservados.");
+        System.out.println("OK: 100 bloques de swap sin colisiones con el ejemplo, capacidad y reutilización.");
+    }
+
+    private static DiskScheduler diskWithFiles(int total, int swap, InitialFile... files) {
+        return new DiskScheduler(total, 0, swap, 1, DiskPolicies.create(DiskPolicy.FIFO), files);
     }
 
     private static void invalido(Runnable action) {
