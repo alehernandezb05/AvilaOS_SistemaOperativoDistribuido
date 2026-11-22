@@ -37,31 +37,22 @@ public class DialogoCrearProceso extends JDialog {
     public static final int MAX_PRIORIDAD = 10;
     public static final int MIN_DEADLINE = 1;
     public static final int MAX_DEADLINE = 100000;
-    public static final int MAX_CICLOS_TIPO = 1000;     // E/S y produccion/consumo
-    public static final int MAX_ELEMENTOS = 10000;
+    public static final int MAX_CICLOS_TIPO = 1000;     // E/S
 
     // Nombres de las tarjetas del CardLayout
     private static final String SIN_DATOS = "sin datos";
     private static final String DATOS_ES = "es";
-    private static final String DATOS_BUFFER = "buffer";
 
     private final JTextField txtNombre = new JTextField(15);
     private final JSpinner spnInstrucciones = new JSpinner(new SpinnerNumberModel(20, MIN_INSTRUCCIONES, MAX_INSTRUCCIONES, 1));
     private final JSpinner spnMemoria = new JSpinner(new SpinnerNumberModel(32, MIN_MEMORIA, MAX_MEMORIA, 1));
     private final JSpinner spnPrioridad = new JSpinner(new SpinnerNumberModel(5, MIN_PRIORIDAD, MAX_PRIORIDAD, 1));
     private final JSpinner spnDeadline = new JSpinner(new SpinnerNumberModel(100, MIN_DEADLINE, MAX_DEADLINE, 1));
-    private final JComboBox<TipoProceso> comboTipo = new JComboBox<>(TipoProceso.values());
-    private final JSpinner spnComputador;
+    private final JComboBox<TipoProceso> comboTipo = new JComboBox<>(new TipoProceso[] {TipoProceso.CPU_BOUND, TipoProceso.IO_BOUND});
 
     // I/O bound
     private final JSpinner spnCiclosParaES = new JSpinner(new SpinnerNumberModel(5, 1, MAX_CICLOS_TIPO, 1));
     private final JSpinner spnDuracionES = new JSpinner(new SpinnerNumberModel(3, 1, MAX_CICLOS_TIPO, 1));
-
-    // Productor y consumidor
-    private final JComboBox<String> comboBuffer;
-    private final JLabel lblCiclosPorElemento = new JLabel();
-    private final JSpinner spnCiclosPorElemento = new JSpinner(new SpinnerNumberModel(4, 1, MAX_CICLOS_TIPO, 1));
-    private final JSpinner spnElementos = new JSpinner(new SpinnerNumberModel(10, 1, MAX_ELEMENTOS, 1));
 
     private final CardLayout tarjetas = new CardLayout();
     private final JPanel datosTipo = new JPanel(tarjetas);
@@ -69,12 +60,9 @@ public class DialogoCrearProceso extends JDialog {
     private final long cicloActual;
     private PCB procesoCreado = null;
 
-    /** @param buffersDisponibles IDs de los buffers que pueden usar productores y consumidores */
-    public DialogoCrearProceso(Frame duenio, int cantidadComputadores, long cicloActual, String[] buffersDisponibles) {
+    public DialogoCrearProceso(Frame duenio, long cicloActual) {
         super(duenio, "Crear proceso", true);
         this.cicloActual = cicloActual;
-        this.spnComputador = new JSpinner(new SpinnerNumberModel(1, 1, cantidadComputadores, 1));
-        this.comboBuffer = new JComboBox<>(buffersDisponibles);
 
         JPanel campos = new JPanel(new GridLayout(0, 2, 8, 6));
         campos.setBorder(BorderFactory.createEmptyBorder(10, 10, 4, 10));
@@ -84,7 +72,7 @@ public class DialogoCrearProceso extends JDialog {
         agregarCampo(campos, "Prioridad (" + MIN_PRIORIDAD + " = mas alta):", spnPrioridad);
         agregarCampo(campos, "Deadline en ciclos (" + MIN_DEADLINE + "-" + MAX_DEADLINE + "):", spnDeadline);
         agregarCampo(campos, "Tipo:", comboTipo);
-        agregarCampo(campos, "Computador (1-" + cantidadComputadores + "):", spnComputador);
+        agregarCampo(campos, "Computador:", new JLabel("1 (unico)"));
 
         crearTarjetas();
         comboTipo.addActionListener(e -> mostrarDatosDelTipo());
@@ -116,14 +104,8 @@ public class DialogoCrearProceso extends JDialog {
         agregarCampo(es, "Cada cuantos ciclos hace E/S (1-" + MAX_CICLOS_TIPO + "):", spnCiclosParaES);
         agregarCampo(es, "Duracion de cada E/S en ciclos (1-" + MAX_CICLOS_TIPO + "):", spnDuracionES);
 
-        JPanel buffer = seccion();
-        agregarCampo(buffer, "Buffer:", comboBuffer);
-        agregarCampo(buffer, lblCiclosPorElemento, spnCiclosPorElemento);
-        agregarCampo(buffer, "Elementos para terminar (1-" + MAX_ELEMENTOS + "):", spnElementos);
-
         datosTipo.add(sinDatos, SIN_DATOS);
         datosTipo.add(es, DATOS_ES);
-        datosTipo.add(buffer, DATOS_BUFFER);
     }
 
     private static JPanel seccion() {
@@ -140,10 +122,8 @@ public class DialogoCrearProceso extends JDialog {
         String tarjeta = switch (tipo) {
             case CPU_BOUND -> SIN_DATOS;
             case IO_BOUND -> DATOS_ES;
-            case PRODUCTOR, CONSUMIDOR -> DATOS_BUFFER;
+            default -> throw new IllegalArgumentException("Tipo de proceso no disponible en el Proyecto 2.");
         };
-        String verbo = tipo == TipoProceso.PRODUCTOR ? "produce" : "consume";
-        lblCiclosPorElemento.setText("Cada cuantos ciclos " + verbo + " un elemento (1-" + MAX_CICLOS_TIPO + "):");
         tarjetas.show(datosTipo, tarjeta);
         pack();
     }
@@ -165,19 +145,15 @@ public class DialogoCrearProceso extends JDialog {
             return;
         }
         TipoProceso tipo = (TipoProceso) comboTipo.getSelectedItem();
-        PCB pcb = new PCB(txtNombre.getText().trim(), valor(spnComputador), tipo, valor(spnPrioridad),
+        PCB pcb = new PCB(txtNombre.getText().trim(), 1, tipo, valor(spnPrioridad),
                 valor(spnMemoria), valor(spnInstrucciones), valor(spnDeadline), cicloActual);
         switch (tipo) {
             case IO_BOUND -> {
                 pcb.setCiclosParaES(valor(spnCiclosParaES));
                 pcb.setDuracionES(valor(spnDuracionES));
             }
-            case PRODUCTOR, CONSUMIDOR -> {
-                pcb.setIdBuffer((String) comboBuffer.getSelectedItem());
-                pcb.setCiclosPorElemento(valor(spnCiclosPorElemento));
-                pcb.setElementosTotales(valor(spnElementos));
-            }
             case CPU_BOUND -> { }
+            default -> throw new IllegalArgumentException("Tipo de proceso no disponible en el Proyecto 2.");
         }
         procesoCreado = pcb;
         dispose();
@@ -193,8 +169,8 @@ public class DialogoCrearProceso extends JDialog {
             return "El nombre debe tener como maximo " + MAX_NOMBRE + " caracteres.";
         }
         String error = validarSpinners(
-                new String[] {"instrucciones", "memoria", "prioridad", "deadline", "computador"},
-                new JSpinner[] {spnInstrucciones, spnMemoria, spnPrioridad, spnDeadline, spnComputador});
+                new String[] {"instrucciones", "memoria", "prioridad", "deadline"},
+                new JSpinner[] {spnInstrucciones, spnMemoria, spnPrioridad, spnDeadline});
         if (error != null) {
             return error;
         }
@@ -208,15 +184,7 @@ public class DialogoCrearProceso extends JDialog {
             case IO_BOUND -> validarSpinners(
                     new String[] {"cada cuantos ciclos hace E/S", "duracion de la E/S"},
                     new JSpinner[] {spnCiclosParaES, spnDuracionES});
-            case PRODUCTOR, CONSUMIDOR -> {
-                if (comboBuffer.getItemCount() == 0) {
-                    yield "No hay buffers creados. Crea uno con \"Crear buffer\" antes de crear "
-                            + "productores o consumidores.";
-                }
-                yield validarSpinners(
-                        new String[] {"cada cuantos ciclos por elemento", "elementos para terminar"},
-                        new JSpinner[] {spnCiclosPorElemento, spnElementos});
-            }
+            default -> "Tipo de proceso no disponible en el Proyecto 2.";
         };
     }
 
