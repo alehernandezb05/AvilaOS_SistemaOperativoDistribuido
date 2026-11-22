@@ -4,12 +4,20 @@ import edu.unimet.avilaos.hardware.CPU;
 import edu.unimet.avilaos.hardware.ComponenteReloj;
 import edu.unimet.avilaos.hardware.ModoEjecucion;
 import edu.unimet.avilaos.hardware.RAM;
+import edu.unimet.avilaos.hardware.disco.DiskCompletion;
+import edu.unimet.avilaos.hardware.disco.DiskRequest;
+import edu.unimet.avilaos.hardware.disco.DiskScheduler;
+import edu.unimet.avilaos.hardware.disco.enums.DiskOperation;
+import edu.unimet.avilaos.so.archivos.OperacionArchivo;
+import edu.unimet.avilaos.so.archivos.SistemaArchivos;
 
 public class NucleoSO implements ComponenteReloj {
 
     private final int idComputador;
     private final CPU cpu;
     private final RAM ram;
+    private final DiskScheduler disco;
+    private final SistemaArchivos archivos;
     private final ColasSO colas = new ColasSO();
     private volatile EstrategiaPlanificacion estrategia;
     private int ciclosEnCpu = 0;
@@ -17,11 +25,14 @@ public class NucleoSO implements ComponenteReloj {
     private volatile ServicioCluster servicio;
     private volatile long cicloActual = 0;
 
-    public NucleoSO(int idComputador, CPU cpu, RAM ram, EstrategiaPlanificacion estrategia) {
+    public NucleoSO(int idComputador, CPU cpu, RAM ram, EstrategiaPlanificacion estrategia,
+                    DiskScheduler disco, SistemaArchivos archivos) {
         this.idComputador = idComputador;
         this.cpu = cpu;
         this.ram = ram;
         this.estrategia = estrategia;
+        this.disco = disco;
+        this.archivos = archivos;
     }
 
     public void agregarProceso(PCB proceso) {
@@ -33,13 +44,15 @@ public class NucleoSO implements ComponenteReloj {
         cicloActual = cicloGlobal;
         avanzarBloqueados();
         procesarProtocolo();
-        terminarSiCorresponde(cicloGlobal);
+        enviarSolicitudDisco();
+        terminarSiCorresponde();
         bloquearPorESSiCorresponde();
         procesarDeadlines(cicloGlobal);
         admitirNuevos();
         // Despues de admitir: solo pierden deadline los que siguen esperando memoria
         procesarDeadlinesNuevos(cicloGlobal);
         planificar();
+        recibirFinalizacionesDisco();
         if (!cpu.estaLibre()) {
             ciclosEnCpu++;
         }
@@ -97,13 +110,68 @@ public class NucleoSO implements ComponenteReloj {
         }
     }
 
-    private void terminarSiCorresponde(long cicloGlobal) {
+    private void terminarSiCorresponde() {
         PCB actual = cpu.getProcesoActual();
         if (actual != null && actual.haTerminado()) {
             cpu.liberar();
             ciclosEnCpu = 0;
-            finalizar(actual, MotivoTerminacion.COMPLETADO, cicloGlobal);
-            registrar("termina el proceso " + actual + " y libera " + actual.getMemoria() + " de RAM");
+            finalizarCompletado(actual);
+        }
+    }
+
+    private void finalizarCompletado(PCB proceso) {
+        finalizar(proceso, MotivoTerminacion.COMPLETADO, cicloActual);
+        registrar("termina el proceso " + proceso + " y libera " + proceso.getMemoria() + " de RAM");
+    }
+
+    private void enviarSolicitudDisco() {
+        PCB proceso = cpu.getProcesoActual();
+        if (proceso == null || !proceso.debeEnviarSolicitudDisco()) return;
+        OperacionArchivo operacion = proceso.getOperacionArchivo();
+        DiskRequest solicitud;
+        try {
+            if (operacion.tipo() == DiskOperation.UPDATE && operacion.nuevoNombre() == null) {
+                throw new IllegalArgumentException("UPDATE requiere newName.");
+            }
+            if (operacion.tipo() != DiskOperation.READ) {
+                throw new IllegalArgumentException(operacion.tipo() + " todavía no está disponible.");
+            }
+            if (archivos == null) throw new IllegalArgumentException("Falta cargar el sistema de archivos.");
+            var archivo = archivos.archivoParaLectura(operacion.ruta(), operacion.solicitante());
+            int[] bloques = disco.getStorage().getFileChain(archivo.ruta(), archivo.primerBloque());
+            solicitud = new DiskRequest(proceso.getId(), proceso.getNombre(), operacion.tipo(), bloques);
+            if (!disco.addRequest(solicitud)) return;
+        } catch (IllegalArgumentException e) {
+            cpu.liberar();
+            ciclosEnCpu = 0;
+            finalizar(proceso, MotivoTerminacion.ERROR_ES, cicloActual);
+            registrar("rechaza " + operacion.tipo() + " " + operacion.ruta() + " de " + proceso + ". " + e.getMessage());
+            return;
+        }
+        proceso.registrarSolicitudDisco(solicitud);
+        cpu.liberar();
+        ciclosEnCpu = 0;
+        colas.agregarBloqueado(proceso, MotivoBloqueo.ESPERA_DISCO);
+        registrar("encola solicitud " + solicitud.getId() + " " + operacion.tipo() + " " + operacion.ruta()
+                + " de " + proceso + " (ejecución -> bloqueado)");
+    }
+
+    /** Publica los despertares después de planificar para que pasen por Listo. */
+    private void recibirFinalizacionesDisco() {
+        DiskCompletion resultado;
+        while ((resultado = disco.pollCompleted()) != null) {
+            for (int i = 0; i < colas.cantidadBloqueados(); i++) {
+                PCB proceso = colas.obtenerBloqueado(i);
+                if (proceso == null || proceso.getMotivoBloqueo() != MotivoBloqueo.ESPERA_DISCO) continue;
+                DiskRequest pendiente = proceso.getSolicitudDisco();
+                if (proceso.getId() == resultado.processId() && pendiente != null
+                        && pendiente.getId() == resultado.requestId() && colas.quitarBloqueado(proceso)) {
+                    colas.agregarListo(proceso);
+                    registrar("termina la solicitud " + resultado.requestId() + " " + resultado.operation()
+                            + " de " + proceso + " (bloqueado -> listo)");
+                    break;
+                }
+            }
         }
     }
 
@@ -250,8 +318,10 @@ public class NucleoSO implements ComponenteReloj {
         int i = 0;
         PCB listo = colas.obtenerListo(i);
         while (listo != null) {
-            listo.decrementarDeadline();
-            if (listo.deadlineVencido()) {
+            if (listo.haTerminado()) {
+                colas.quitarListo(listo);
+                finalizarCompletado(listo);
+            } else if (venceDeadline(listo)) {
                 colas.quitarListo(listo);
                 finalizar(listo, MotivoTerminacion.DEADLINE_VENCIDO, cicloGlobal);
                 registrar("vence deadline del proceso " + listo + " en cola de listos");
@@ -274,6 +344,11 @@ public class NucleoSO implements ComponenteReloj {
             }
             bloqueado = colas.obtenerBloqueado(j);
         }
+    }
+
+    private boolean venceDeadline(PCB proceso) {
+        proceso.decrementarDeadline();
+        return proceso.deadlineVencido();
     }
 
     private void admitirNuevos() {
@@ -334,7 +409,7 @@ public class NucleoSO implements ComponenteReloj {
         PCB p = cpu.getProcesoActual();
         if (p == null) {
             cpu.setModo(ModoEjecucion.SISTEMA_OPERATIVO);
-        } else if (p.esProductorConsumidor() && p.getPaso() != PasoProtocolo.TRABAJO) {
+        } else if (p.ejecutaraOperacionArchivo() || (p.esProductorConsumidor() && p.getPaso() != PasoProtocolo.TRABAJO)) {
             cpu.setModo(ModoEjecucion.SISTEMA_OPERATIVO);
         } else {
             cpu.setModo(ModoEjecucion.USUARIO);

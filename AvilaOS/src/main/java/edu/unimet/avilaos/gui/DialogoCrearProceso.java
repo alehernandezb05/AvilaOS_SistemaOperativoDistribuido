@@ -2,6 +2,8 @@ package edu.unimet.avilaos.gui;
 
 import edu.unimet.avilaos.so.PCB;
 import edu.unimet.avilaos.so.TipoProceso;
+import edu.unimet.avilaos.hardware.disco.enums.DiskOperation;
+import edu.unimet.avilaos.so.archivos.OperacionArchivo;
 import java.awt.BorderLayout;
 import java.awt.CardLayout;
 import java.awt.Component;
@@ -42,8 +44,10 @@ public class DialogoCrearProceso extends JDialog {
     // Nombres de las tarjetas del CardLayout
     private static final String SIN_DATOS = "sin datos";
     private static final String DATOS_ES = "es";
+    private static final String DATOS_READ = "read";
 
     private final JTextField txtNombre = new JTextField(15);
+    private final JTextField txtSolicitante = new JTextField(15);
     private final JSpinner spnInstrucciones = new JSpinner(new SpinnerNumberModel(20, MIN_INSTRUCCIONES, MAX_INSTRUCCIONES, 1));
     private final JSpinner spnMemoria = new JSpinner(new SpinnerNumberModel(32, MIN_MEMORIA, MAX_MEMORIA, 1));
     private final JSpinner spnPrioridad = new JSpinner(new SpinnerNumberModel(5, MIN_PRIORIDAD, MAX_PRIORIDAD, 1));
@@ -58,11 +62,17 @@ public class DialogoCrearProceso extends JDialog {
     private final JPanel datosTipo = new JPanel(tarjetas);
 
     private final long cicloActual;
+    private final String rutaLectura;
     private PCB procesoCreado = null;
 
     public DialogoCrearProceso(Frame duenio, long cicloActual) {
+        this(duenio, cicloActual, null);
+    }
+
+    public DialogoCrearProceso(Frame duenio, long cicloActual, String rutaLectura) {
         super(duenio, "Crear proceso", true);
         this.cicloActual = cicloActual;
+        this.rutaLectura = rutaLectura;
 
         JPanel campos = new JPanel(new GridLayout(0, 2, 8, 6));
         campos.setBorder(BorderFactory.createEmptyBorder(10, 10, 4, 10));
@@ -75,6 +85,13 @@ public class DialogoCrearProceso extends JDialog {
         agregarCampo(campos, "Computador:", new JLabel("1 (unico)"));
 
         crearTarjetas();
+        if (rutaLectura != null) {
+            comboTipo.setSelectedItem(TipoProceso.IO_BOUND);
+            comboTipo.setEnabled(false);
+            txtNombre.setText("Lectura");
+            spnInstrucciones.setValue(2);
+            spnDeadline.setValue(500);
+        }
         comboTipo.addActionListener(e -> mostrarDatosDelTipo());
 
         JButton btnCrear = new JButton("Crear");
@@ -106,6 +123,13 @@ public class DialogoCrearProceso extends JDialog {
 
         datosTipo.add(sinDatos, SIN_DATOS);
         datosTipo.add(es, DATOS_ES);
+        if (rutaLectura != null) {
+            JPanel read = seccion();
+            agregarCampo(read, "Operación:", new JLabel("READ"));
+            agregarCampo(read, "Ruta:", new JLabel(rutaLectura));
+            agregarCampo(read, "Solicitante (vacío para acceso público):", txtSolicitante);
+            datosTipo.add(read, DATOS_READ);
+        }
     }
 
     private static JPanel seccion() {
@@ -118,6 +142,11 @@ public class DialogoCrearProceso extends JDialog {
 
     /** Muestra la tarjeta del tipo elegido y ajusta el tamano de la ventana. */
     private void mostrarDatosDelTipo() {
+        if (rutaLectura != null) {
+            tarjetas.show(datosTipo, DATOS_READ);
+            pack();
+            return;
+        }
         TipoProceso tipo = (TipoProceso) comboTipo.getSelectedItem();
         String tarjeta = switch (tipo) {
             case CPU_BOUND -> SIN_DATOS;
@@ -145,15 +174,15 @@ public class DialogoCrearProceso extends JDialog {
             return;
         }
         TipoProceso tipo = (TipoProceso) comboTipo.getSelectedItem();
+        String solicitante = txtSolicitante.getText().strip();
+        OperacionArchivo operacion = rutaLectura == null ? null
+                : new OperacionArchivo(DiskOperation.READ, rutaLectura,
+                        solicitante.isEmpty() ? null : solicitante, 0, null);
         PCB pcb = new PCB(txtNombre.getText().trim(), 1, tipo, valor(spnPrioridad),
-                valor(spnMemoria), valor(spnInstrucciones), valor(spnDeadline), cicloActual);
-        switch (tipo) {
-            case IO_BOUND -> {
-                pcb.setCiclosParaES(valor(spnCiclosParaES));
-                pcb.setDuracionES(valor(spnDuracionES));
-            }
-            case CPU_BOUND -> { }
-            default -> throw new IllegalArgumentException("Tipo de proceso no disponible en el Proyecto 2.");
+                valor(spnMemoria), valor(spnInstrucciones), valor(spnDeadline), cicloActual, operacion);
+        if (operacion == null && tipo == TipoProceso.IO_BOUND) {
+            pcb.setCiclosParaES(valor(spnCiclosParaES));
+            pcb.setDuracionES(valor(spnDuracionES));
         }
         procesoCreado = pcb;
         dispose();
@@ -174,6 +203,7 @@ public class DialogoCrearProceso extends JDialog {
         if (error != null) {
             return error;
         }
+        if (rutaLectura != null) return null;
         TipoProceso tipo = (TipoProceso) comboTipo.getSelectedItem();
         if (tipo == null) {
             return "Debe elegir un tipo de proceso.";

@@ -13,16 +13,13 @@ computador con CPU, RAM, planificacion y metricas del Proyecto 1.
 - El quantum puede ser cero con FCFS, EDF y Prioridades. Antes de elegir Round
   Robin, configurar un quantum entre 1 y 50. Los cambios invalidos se explican
   y conservan la configuracion anterior.
-- Para una carga de ejemplo, seleccionar `escenarios/07_un_computador.json`
-  con **Cargar desde archivo**. Incluye CPU, E/S y un proceso que espera RAM
-  hasta vencer su deadline. Las configuraciones del Proyecto 1 con varios
-  computadores o buffers se rechazan con un mensaje, sin modificarlas.
-
-La carga obligatoria de los dos JSON del Proyecto 2 y la conexion de E/S al
-disco se incorporan en las tareas de sistema de archivos e integracion. Este
-cambio conserva la E/S temporal de los procesos del Proyecto 1; el disco ya
-comparte su reloj, pero la conexion de los PCBs a las solicitudes corresponde
-a la integracion de E/S.
+- Carga `escenarios/09_procesos_archivos.json` con **Cargar procesos…**, en el
+  diálogo inicial o desde la ventana principal. Para habilitar **Iniciar**,
+  carga también `escenarios/08_sistema_archivos.json` desde la pestaña
+  **Sistema de archivos**. Los dos archivos pueden cargarse en cualquier orden
+  desde la ventana principal.
+- Para una carga de CPU y E/S temporal del Proyecto 1, usa
+  `escenarios/07_un_computador.json` como archivo de procesos.
 
 Para explorar el ejemplo del enunciado, abre la pestaña **Sistema de archivos**
 y carga `escenarios/08_sistema_archivos.json`. La pestaña muestra la jerarquía,
@@ -33,6 +30,18 @@ aporta el tamaño de swap, que debe caber junto con los archivos.
 Para archivos de un bloque basta con `startBlock` y `blocks`. Los archivos
 de varios bloques incluyen también `blockChain`, un arreglo ordenado con
 todas las posiciones que empieza en `startBlock` y tiene `blocks` elementos.
+
+Para crear una lectura, selecciona un archivo y pulsa **Crear proceso READ…**.
+La primera instrucción consume un ciclo de CPU en modo sistema operativo.
+Después el proceso espera a que el disco termine la cadena y vuelve a Listo.
+
+El JSON de procesos asigna el computador 1 y el tipo `IO_BOUND`. Si se omiten,
+`priority` vale 1, `quantum` vale 3, `headSpeed` vale 1 y `fileSizeBlocks`
+vale 0. `requester` es la identidad del usuario dentro de la simulación.
+Si se omite, la lectura se limita a archivos públicos. Para leer un archivo
+privado, el solicitante debe coincidir con su dueño.
+El ejemplo ejecuta cinco lecturas y registra tres errores de E/S. Los dos
+`UPDATE` requieren `newName` y `DELETE` está pendiente de implementación.
 
 ## Verificacion
 

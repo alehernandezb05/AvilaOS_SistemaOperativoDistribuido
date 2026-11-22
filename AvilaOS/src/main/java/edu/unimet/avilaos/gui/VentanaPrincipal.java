@@ -78,11 +78,11 @@ public class VentanaPrincipal extends JFrame {
         JScrollPane scrollComputadores = new JScrollPane(panelComputador);
         scrollComputadores.getVerticalScrollBar().setUnitIncrement(16);
         panelArchivos = new PanelSistemaArchivos(simulador.getSistemaArchivos(), rutaSeleccionada,
-                this::cargarSistemaArchivos);
+                this::cargarSistemaArchivos, this::abrirDialogoCrearLectura);
         JTabbedPane vistas = new JTabbedPane();
         vistas.addTab("Computador", scrollComputadores);
         vistas.addTab("Sistema de archivos", panelArchivos);
-        if (simulador.getSistemaArchivos() != null) vistas.setSelectedComponent(panelArchivos);
+        if (simulador.impedimentoInicio() != null || rutaSeleccionada != null) vistas.setSelectedComponent(panelArchivos);
         JSplitPane principal = new JSplitPane(JSplitPane.VERTICAL_SPLIT, vistas, inferior);
         principal.setResizeWeight(0.6);
         add(principal, BorderLayout.CENTER);
@@ -98,6 +98,7 @@ public class VentanaPrincipal extends JFrame {
     /** Los controles solo llaman al Simulador; no tienen logica propia. */
     private void conectarControles() {
         panelControles.setValores(simulador.getDuracionCicloMs(), simulador.getQuantum());
+        panelControles.setCorriendo(false, simulador.impedimentoInicio());
         panelControles.alIniciar(e -> simulador.iniciar());
         panelControles.alPausar(e -> simulador.pausar());
         panelControles.alCambiarDuracionCiclo(simulador::setDuracionCicloMs);
@@ -138,7 +139,7 @@ public class VentanaPrincipal extends JFrame {
 
     /** Lee un JSON y, si es valido y el usuario confirma, reinicia la simulacion con el. */
     private void cargarConfiguracion() {
-        Path archivo = SelectorArchivoJson.elegirParaAbrir(this);
+        Path archivo = SelectorArchivoJson.elegirParaAbrir(this, "Cargar procesos");
         if (archivo == null) {
             return;
         }
@@ -152,7 +153,7 @@ public class VentanaPrincipal extends JFrame {
             error(e.getMessage());
             return;
         }
-        if (JOptionPane.showConfirmDialog(this,
+        if ((simulador.getCicloActual() == 0 && !simulador.estaCorriendo()) || JOptionPane.showConfirmDialog(this,
                 "Cargar la configuracion reinicia la simulacion y se pierde el estado actual. Continuar?",
                 "Cargar configuracion", JOptionPane.YES_NO_OPTION) == JOptionPane.YES_OPTION) {
             reiniciarCon(config, simulador.getSistemaArchivos());
@@ -203,7 +204,7 @@ public class VentanaPrincipal extends JFrame {
     /** Lee el estado del simulador y repinta los paneles. */
     private void actualizar() {
         panelControles.setCiclo(simulador.getCicloActual());
-        panelControles.setCorriendo(simulador.estaCorriendo());
+        panelControles.setCorriendo(simulador.estaCorriendo(), simulador.impedimentoInicio());
         panelComputador.actualizar();
         panelGrafico.actualizar();
         panelLog.actualizar(simulador.getLog());
@@ -212,7 +213,11 @@ public class VentanaPrincipal extends JFrame {
 
     /** Abre el dialogo de crear proceso y lo envia al simulador. */
     private void abrirDialogoCrearProceso() {
-        DialogoCrearProceso dialogo = new DialogoCrearProceso(this, simulador.getCicloActual());
+        abrirDialogoCrearLectura(null);
+    }
+
+    private void abrirDialogoCrearLectura(String ruta) {
+        DialogoCrearProceso dialogo = new DialogoCrearProceso(this, simulador.getCicloActual(), ruta);
         dialogo.setVisible(true);
         PCB proceso = dialogo.getProcesoCreado();
         if (proceso != null) {

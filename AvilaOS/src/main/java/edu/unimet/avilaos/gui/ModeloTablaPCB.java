@@ -1,5 +1,6 @@
 package edu.unimet.avilaos.gui;
 
+import edu.unimet.avilaos.so.MotivoBloqueo;
 import edu.unimet.avilaos.so.PCB;
 import javax.swing.table.AbstractTableModel;
 
@@ -10,7 +11,8 @@ import javax.swing.table.AbstractTableModel;
 public class ModeloTablaPCB extends AbstractTableModel {
 
     static final String[] COLUMNAS = {
-        "ID", "Nombre", "Tipo", "Estado", "Prioridad", "Memoria", "Deadline", "Restante", "PC", "Motivo"
+        "ID", "Nombre", "Tipo", "Estado", "Prioridad", "Memoria", "Deadline", "Restante", "PC", "Motivo",
+        "Operación", "Ruta"
     };
 
     private PCB[] procesos = new PCB[0];
@@ -49,7 +51,10 @@ public class ModeloTablaPCB extends AbstractTableModel {
             case 6 -> p.getDeadline();
             case 7 -> p.getTiempoRestante();
             case 8 -> p.getProgramCounter();
-            case 9 -> p.getMotivoBloqueo() == null ? "" : p.getMotivoBloqueo();
+            case 9 -> p.getMotivoBloqueo() == MotivoBloqueo.ESPERA_DISCO ? "E/S de disco"
+                    : p.getMotivoBloqueo() == null ? p.getMotivoTerminacion() : p.getMotivoBloqueo();
+            case 10 -> p.getOperacionArchivo() == null ? "" : p.getOperacionArchivo().tipo();
+            case 11 -> p.getOperacionArchivo() == null ? "" : p.getOperacionArchivo().ruta();
             default -> "";
         };
     }

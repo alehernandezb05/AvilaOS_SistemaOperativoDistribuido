@@ -13,16 +13,7 @@ public final class SistemaArchivos {
     public record Entrada(String ruta, Tipo tipo, String duenio, Permiso permiso, int[] cadena) {
 
         public Entrada {
-            if (ruta == null || !ruta.startsWith("/")) {
-                throw new IllegalArgumentException("La ruta debe ser absoluta: " + ruta);
-            }
-            if (!ruta.equals("/")) {
-                for (String nombre : ruta.substring(1).split("/", -1)) {
-                    if (nombre.isBlank() || nombre.equals(".") || nombre.equals("..")) {
-                        throw new IllegalArgumentException("Componente inválido en la ruta " + ruta + ".");
-                    }
-                }
-            }
+            validarRuta(ruta);
             if (tipo == null || duenio == null || duenio.isBlank() || permiso == null || cadena == null) {
                 throw new IllegalArgumentException("Metadatos incompletos de " + ruta + ".");
             }
@@ -41,6 +32,30 @@ public final class SistemaArchivos {
 
         public int bloques() { return cadena.length; }
         public int primerBloque() { return cadena.length == 0 ? DiskBlock.END_OF_CHAIN : cadena[0]; }
+    }
+
+    static void validarRuta(String ruta) {
+        if (ruta == null || !ruta.startsWith("/")) {
+            throw new IllegalArgumentException("La ruta debe ser absoluta: " + ruta);
+        }
+        if (ruta.equals("/")) return;
+        for (String nombre : ruta.substring(1).split("/", -1)) {
+            if (nombre.isBlank() || nombre.equals(".") || nombre.equals("..")) {
+                throw new IllegalArgumentException("Componente inválido en la ruta " + ruta + ".");
+            }
+        }
+    }
+
+    public Entrada archivoParaLectura(String ruta, String solicitante) {
+        Nodo nodo = buscar(ruta);
+        if (nodo == null || nodo.entrada.tipo() != Tipo.FILE) {
+            throw new IllegalArgumentException("No existe un archivo en " + ruta + ".");
+        }
+        Entrada archivo = nodo.entrada;
+        if (archivo.permiso() == Permiso.PRIVATE && !archivo.duenio().equals(solicitante)) {
+            throw new IllegalArgumentException("READ denegado: " + ruta + " es privado y pertenece a " + archivo.duenio() + ".");
+        }
+        return archivo;
     }
 
     public static final class Nodo {
