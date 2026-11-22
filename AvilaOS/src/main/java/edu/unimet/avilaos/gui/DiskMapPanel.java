@@ -14,6 +14,7 @@ import javax.swing.JPanel;
  */
 public class DiskMapPanel extends JPanel {
 
+    static final Color COLOR_ARCHIVO = new Color(239, 154, 154);
     private DiskScheduler diskScheduler;
     private static final int BLOCK_SIZE = 14;
     private static final int BLOCK_MARGIN = 2;
@@ -64,7 +65,7 @@ public class DiskMapPanel extends JPanel {
 
             g.setColor(i == currentHead ? Color.ORANGE : switch (block.contentType()) {
                 case FREE -> new Color(200, 230, 201);
-                case FILE -> new Color(239, 154, 154);
+                case FILE -> COLOR_ARCHIVO;
                 case SWAP_RESERVED -> new Color(225, 190, 231);
                 case SWAP_OCCUPIED -> new Color(171, 117, 188);
             });

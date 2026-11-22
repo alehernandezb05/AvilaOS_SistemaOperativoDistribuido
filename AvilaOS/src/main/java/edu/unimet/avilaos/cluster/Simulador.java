@@ -5,6 +5,7 @@ import edu.unimet.avilaos.config.ConfigDisco;
 import edu.unimet.avilaos.hardware.disco.DiskScheduler;
 import edu.unimet.avilaos.hardware.disco.DiskPolicies;
 import edu.unimet.avilaos.hardware.disco.DiskSnapshot;
+import edu.unimet.avilaos.hardware.disco.DiskStorage.InitialFile;
 import edu.unimet.avilaos.hardware.disco.enums.DiskPolicy;
 import edu.unimet.avilaos.config.Configuracion;
 import edu.unimet.avilaos.config.Configuracion.ConfigBuffer;
@@ -17,6 +18,7 @@ import edu.unimet.avilaos.so.Log;
 import edu.unimet.avilaos.so.PCB;
 import edu.unimet.avilaos.so.PoliticaPlanificacion;
 import edu.unimet.avilaos.so.ServicioCluster;
+import edu.unimet.avilaos.so.archivos.SistemaArchivos;
 import edu.unimet.avilaos.so.politicas.EDF;
 import edu.unimet.avilaos.so.politicas.FCFS;
 import edu.unimet.avilaos.so.politicas.PrioridadesApropiativas;
@@ -32,6 +34,7 @@ public class Simulador implements ServicioCluster {
 
     private final Reloj reloj;
     private final Computador[] computadores;
+    private final SistemaArchivos sistemaArchivos;
     private final Log log = new Log();
     private final int latenciaRed;       // ciclos que cuesta cada acceso a un buffer remoto
     // Datos con los que se creo cada proceso, para guardarlos como carga inicial
@@ -46,8 +49,12 @@ public class Simulador implements ServicioCluster {
      * guardaron) y despues los procesos que los usan.
      */
     public Simulador(Configuracion config) {
+        this(config, null);
+    }
+
+    public Simulador(Configuracion config, SistemaArchivos sistemaArchivos) {
         this(config.getDuracionCicloMs(), config.getQuantum(), config.getLatenciaRed(),
-                config.getTamanosRam(), config.getPoliticas(), config.getDisco());
+                config.getTamanosRam(), config.getPoliticas(), config.getDisco(), sistemaArchivos);
         for (ConfigBuffer buffer : config.getBuffers()) {
             crearBuffer(buffer.getCapacidad(), buffer.getAnfitrion());
         }
@@ -71,6 +78,11 @@ public class Simulador implements ServicioCluster {
 
     public Simulador(int duracionCicloMs, int quantum, int latenciaRed, int[] tamanosRam,
                      PoliticaPlanificacion[] politicas, ConfigDisco configDisco) {
+        this(duracionCicloMs, quantum, latenciaRed, tamanosRam, politicas, configDisco, null);
+    }
+
+    private Simulador(int duracionCicloMs, int quantum, int latenciaRed, int[] tamanosRam,
+                      PoliticaPlanificacion[] politicas, ConfigDisco configDisco, SistemaArchivos sistemaArchivos) {
         if (tamanosRam.length != MIN_COMPUTADORES) {
             throw new IllegalArgumentException("El Proyecto 2 requiere exactamente un computador.");
         }
@@ -85,13 +97,16 @@ public class Simulador implements ServicioCluster {
         }
         this.quantum = quantum;
         this.latenciaRed = latenciaRed;
+        this.sistemaArchivos = sistemaArchivos;
         this.reloj = new Reloj(duracionCicloMs);
         this.computadores = new Computador[tamanosRam.length];
+        int bloques = sistemaArchivos == null ? configDisco.getTotalBlocks() : sistemaArchivos.bloquesDisco();
+        int cabezal = sistemaArchivos == null ? configDisco.getInitialHead() : sistemaArchivos.cabezalInicial();
+        InitialFile[] archivos = sistemaArchivos == null ? new InitialFile[0] : sistemaArchivos.archivosIniciales();
+        DiskScheduler disco = new DiskScheduler(bloques, cabezal, configDisco.getSwapSizeBlocks(),
+                configDisco.getHeadSpeed(), DiskPolicies.create(configDisco.getInitialPolicy()), archivos);
         // Los IDs de los computadores empiezan en 1; todos comparten el mismo log global
         for (int i = 0; i < tamanosRam.length; i++) {
-            DiskScheduler disco = new DiskScheduler(configDisco.getTotalBlocks(), configDisco.getInitialHead(),
-                    configDisco.getSwapSizeBlocks(), configDisco.getHeadSpeed(),
-                    DiskPolicies.create(configDisco.getInitialPolicy()));
             computadores[i] = new Computador(i + 1, tamanosRam[i], crearEstrategia(politicas[i], quantum), reloj, disco);
             computadores[i].setLog(log);
             computadores[i].setServicio(this);
@@ -267,6 +282,7 @@ public class Simulador implements ServicioCluster {
     }
 
     public DiskScheduler getDisco() { return computadores[0].getDisco(); }
+    public SistemaArchivos getSistemaArchivos() { return sistemaArchivos; }
     public void cambiarPoliticaDisco(DiskPolicy politica) { getDisco().setPolicy(politica); }
     public void setVelocidadDisco(int velocidad) { getDisco().setSpeed(velocidad); }
 

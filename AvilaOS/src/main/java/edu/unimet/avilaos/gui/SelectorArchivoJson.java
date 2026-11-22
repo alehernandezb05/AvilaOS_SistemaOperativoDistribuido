@@ -19,7 +19,11 @@ final class SelectorArchivoJson {
 
     /** Pide un archivo para abrir; devuelve null si el usuario cancela. */
     static Path elegirParaAbrir(Component padre) {
-        JFileChooser selector = crearSelector("Cargar configuracion");
+        return elegirParaAbrir(padre, "Cargar configuracion");
+    }
+
+    static Path elegirParaAbrir(Component padre, String titulo) {
+        JFileChooser selector = crearSelector(titulo);
         if (selector.showOpenDialog(padre) != JFileChooser.APPROVE_OPTION) {
             return null;
         }
@@ -44,7 +48,7 @@ final class SelectorArchivoJson {
     private static JFileChooser crearSelector(String titulo) {
         JFileChooser selector = new JFileChooser(ultimaCarpeta);
         selector.setDialogTitle(titulo);
-        selector.setFileFilter(new FileNameExtensionFilter("Configuracion de AvilaOS (*.json)", EXTENSION));
+        selector.setFileFilter(new FileNameExtensionFilter("Archivos JSON (*.json)", EXTENSION));
         return selector;
     }
 }

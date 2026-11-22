@@ -2,15 +2,17 @@ package edu.unimet.avilaos.gui;
 
 import edu.unimet.avilaos.cluster.Simulador;
 import edu.unimet.avilaos.config.ArchivoConfiguracion;
+import edu.unimet.avilaos.config.ArchivoSistemaArchivos;
 import edu.unimet.avilaos.config.Configuracion;
 import edu.unimet.avilaos.config.ConfiguracionInvalidaException;
 import edu.unimet.avilaos.so.PCB;
+import edu.unimet.avilaos.so.archivos.SistemaArchivos;
 import java.awt.BorderLayout;
 import java.awt.Dimension;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.function.Consumer;
+import java.util.function.BiConsumer;
 import javax.swing.JFrame;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
@@ -33,14 +35,15 @@ public class VentanaPrincipal extends JFrame {
     private final PanelGraficoUtilizacion panelGrafico;
     private final PanelMetricas panelMetricas;
     private final PanelComputador panelComputador;
+    private final PanelSistemaArchivos panelArchivos;
     private final Timer refresco;
-    private final Consumer<Configuracion> alReiniciar;
+    private final BiConsumer<Simulador, String> alReiniciar;
 
     /**
-     * @param alReiniciar que hacer al cargar una configuracion: quien abrio la ventana
-     *                    crea un Simulador nuevo con ella y cierra esta ventana
+     * @param alReiniciar abre una simulación ya validada y restaura la ruta seleccionada
      */
-    public VentanaPrincipal(Simulador simulador, Consumer<Configuracion> alReiniciar) {
+    public VentanaPrincipal(Simulador simulador, String rutaSeleccionada,
+                            BiConsumer<Simulador, String> alReiniciar) {
         super("AvilaOS - Proyecto 2");
         this.simulador = simulador;
         this.alReiniciar = alReiniciar;
@@ -74,7 +77,13 @@ public class VentanaPrincipal extends JFrame {
 
         JScrollPane scrollComputadores = new JScrollPane(panelComputador);
         scrollComputadores.getVerticalScrollBar().setUnitIncrement(16);
-        JSplitPane principal = new JSplitPane(JSplitPane.VERTICAL_SPLIT, scrollComputadores, inferior);
+        panelArchivos = new PanelSistemaArchivos(simulador.getSistemaArchivos(), rutaSeleccionada,
+                this::cargarSistemaArchivos);
+        JTabbedPane vistas = new JTabbedPane();
+        vistas.addTab("Computador", scrollComputadores);
+        vistas.addTab("Sistema de archivos", panelArchivos);
+        if (simulador.getSistemaArchivos() != null) vistas.setSelectedComponent(panelArchivos);
+        JSplitPane principal = new JSplitPane(JSplitPane.VERTICAL_SPLIT, vistas, inferior);
         principal.setResizeWeight(0.6);
         add(principal, BorderLayout.CENTER);
 
@@ -146,8 +155,38 @@ public class VentanaPrincipal extends JFrame {
         if (JOptionPane.showConfirmDialog(this,
                 "Cargar la configuracion reinicia la simulacion y se pierde el estado actual. Continuar?",
                 "Cargar configuracion", JOptionPane.YES_NO_OPTION) == JOptionPane.YES_OPTION) {
-            alReiniciar.accept(config);
+            reiniciarCon(config, simulador.getSistemaArchivos());
         }
+    }
+
+    private void cargarSistemaArchivos() {
+        Path archivo = SelectorArchivoJson.elegirParaAbrir(this, "Cargar sistema de archivos");
+        if (archivo == null) return;
+        try {
+            SistemaArchivos sistema = ArchivoSistemaArchivos.cargar(archivo);
+            if ((simulador.estaCorriendo() || simulador.getCicloActual() > 0)
+                    && JOptionPane.showConfirmDialog(this,
+                        "Cargar el sistema de archivos reinicia la simulación. ¿Continuar?",
+                        "Cargar sistema de archivos", JOptionPane.YES_NO_OPTION) != JOptionPane.YES_OPTION) {
+                return;
+            }
+            reiniciarCon(simulador.getConfiguracion(), sistema);
+        } catch (IOException e) {
+            error("No se pudo leer el archivo: " + e.getMessage());
+        } catch (ConfiguracionInvalidaException e) {
+            error(e.getMessage());
+        }
+    }
+
+    private void reiniciarCon(Configuracion config, SistemaArchivos sistema) {
+        Simulador nuevo;
+        try {
+            nuevo = new Simulador(config, sistema);
+        } catch (IllegalArgumentException e) {
+            error(e.getMessage());
+            return;
+        }
+        alReiniciar.accept(nuevo, panelArchivos.rutaSeleccionada());
     }
 
     private void error(String mensaje) {
