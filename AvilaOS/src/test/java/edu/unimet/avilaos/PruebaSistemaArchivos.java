@@ -2,6 +2,7 @@ package edu.unimet.avilaos;
 
 import edu.unimet.avilaos.cluster.Simulador;
 import edu.unimet.avilaos.config.ArchivoSistemaArchivos;
+import edu.unimet.avilaos.config.ArchivoConfiguracion;
 import edu.unimet.avilaos.config.ConfigDisco;
 import edu.unimet.avilaos.config.Configuracion;
 import edu.unimet.avilaos.config.ConfiguracionInvalidaException;
@@ -47,7 +48,8 @@ final class PruebaSistemaArchivos {
             SistemaArchivos anidado = cargar(temporal, archivo + "," + directorios);
             Configuracion config = Configuracion.porDefecto();
             config.setDisco(new ConfigDisco(200, 50, 2, 1, DiskPolicy.SSTF));
-            Simulador nuevo = new Simulador(config, anidado);
+            ArchivoConfiguracion.guardar(config, temporal);
+            Simulador nuevo = new Simulador(ArchivoConfiguracion.cargar(temporal), anidado);
             comprobar(nuevo.getDisco().getCurrentHead() == 7 && nuevo.getDisco().getActivePolicyEnum() == DiskPolicy.SSTF
                     && anidado.buscar("/a/b/vacio").cantidadHijos() == 0
                     && anidado.buscar("/a/b/datos").padre() == anidado.buscar("/a/b"),
@@ -66,7 +68,8 @@ final class PruebaSistemaArchivos {
             rechazar(temporal, archivo + "," + archivo.replace("/a/b/datos", "/a/b/datos/hijo")
                     .replace("\"startBlock\":6", "\"startBlock\":5").replace("[6,3]", "[5,4]") + "," + directorios, "padre");
             try {
-                new Simulador(Configuracion.porDefecto(), anidado);
+                ArchivoConfiguracion.guardar(Configuracion.porDefecto(), temporal);
+                new Simulador(ArchivoConfiguracion.cargar(temporal), anidado);
                 throw new AssertionError("La carga no debe reducir el swap para que quepa.");
             } catch (IllegalArgumentException esperado) {
                 comprobar(esperado.getMessage().contains("swap"), "La incompatibilidad de swap debe explicarse.");

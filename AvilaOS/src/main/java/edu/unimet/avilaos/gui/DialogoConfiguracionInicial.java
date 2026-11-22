@@ -34,6 +34,7 @@ public class DialogoConfiguracionInicial extends JDialog {
     private ConfigProceso[] procesosCargados = new ConfigProceso[0];
     private Configuracion resultado;
     private ConfigDisco discoCargado;
+    private boolean cargaProcesosValidada;
 
     public DialogoConfiguracionInicial(Configuracion inicial) {
         super((java.awt.Frame) null, "AvilaOS - Configuracion del computador", true);
@@ -52,9 +53,9 @@ public class DialogoConfiguracionInicial extends JDialog {
         campos.add(new JLabel("Quantum (0 sin Round Robin, max. " + Configuracion.MAX_QUANTUM + "):"));
         campos.add(spnQuantum);
 
-        JButton btnCargar = new JButton("Cargar desde archivo...");
+        JButton btnCargar = new JButton("Cargar procesos…");
         JButton btnSalir = new JButton("Salir");
-        JButton btnIniciar = new JButton("Iniciar");
+        JButton btnIniciar = new JButton("Abrir simulador");
         btnCargar.addActionListener(e -> cargarArchivo());
         btnSalir.addActionListener(e -> dispose());
         btnIniciar.addActionListener(e -> iniciar());
@@ -89,11 +90,12 @@ public class DialogoConfiguracionInicial extends JDialog {
         comboPolitica.setSelectedItem(config.getComputador(0).getPolitica());
         procesosCargados = config.getProcesos();
         discoCargado = config.getDisco();
+        cargaProcesosValidada = config.tieneCargaProcesos();
         lblProcesos.setText("Carga inicial: " + procesosCargados.length + " procesos");
     }
 
     private void cargarArchivo() {
-        Path archivo = SelectorArchivoJson.elegirParaAbrir(this);
+        Path archivo = SelectorArchivoJson.elegirParaAbrir(this, "Cargar procesos");
         if (archivo == null) {
             return;
         }
@@ -123,6 +125,7 @@ public class DialogoConfiguracionInicial extends JDialog {
                             (PoliticaPlanificacion) comboPolitica.getSelectedItem())
                 }, new Configuracion.ConfigBuffer[0], procesosCargados);
         config.setDisco(discoCargado);
+        config.conservarCargaProcesos(cargaProcesosValidada);
         try {
             config.validar();
             resultado = config;

@@ -30,6 +30,7 @@ public class Configuracion {
     private ConfigComputador[] computadores;
     private ConfigBuffer[] buffers;    // carga inicial; puede faltar en archivos viejos
     private ConfigProceso[] procesos;  // carga inicial; puede faltar en archivos viejos
+    private transient boolean cargaProcesosValidada;
 
     /** Capacidad y computador anfitrion de un buffer de la carga inicial. */
     public static class ConfigBuffer {
@@ -131,6 +132,8 @@ public class Configuracion {
 
     public ConfigDisco getDisco() { return disco == null ? new ConfigDisco() : disco; }
     public void setDisco(ConfigDisco disco) { this.disco = disco; }
+    public boolean tieneCargaProcesos() { return cargaProcesosValidada; }
+    public void conservarCargaProcesos(boolean validada) { cargaProcesosValidada = validada; }
 
     public int getDuracionCicloMs() { return duracionCicloMs; }
     public int getQuantum() { return quantum; }

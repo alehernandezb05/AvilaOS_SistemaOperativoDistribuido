@@ -9,6 +9,9 @@ import java.util.Arrays;
 import edu.unimet.avilaos.cluster.Simulador;
 import edu.unimet.avilaos.config.Configuracion;
 import edu.unimet.avilaos.config.ConfigDisco;
+import edu.unimet.avilaos.config.ArchivoConfiguracion;
+import edu.unimet.avilaos.config.ArchivoSistemaArchivos;
+import java.nio.file.Path;
 import edu.unimet.avilaos.estructuras.Lista;
 import edu.unimet.avilaos.hardware.disco.DiskPolicies;
 import edu.unimet.avilaos.hardware.disco.DiskSnapshot;
@@ -61,6 +64,7 @@ public final class PruebaDisco {
         asignacionEncadenada();
         reservaSwap();
         PruebaSistemaArchivos.ejecutar();
+        PruebaRead.ejecutar();
     }
 
     private static void transferencia() {
@@ -269,7 +273,8 @@ public final class PruebaDisco {
     }
 
     private static void pausaCompartida() throws Exception {
-        Simulador sim = new Simulador(Configuracion.porDefecto());
+        Simulador sim = new Simulador(ArchivoConfiguracion.cargar(Path.of("../escenarios/07_un_computador.json")),
+                ArchivoSistemaArchivos.cargar(Path.of("../escenarios/08_sistema_archivos.json")));
         sim.setDuracionCicloMs(1);
         DiskRequest request = lectura(1, 199);
         sim.getDisco().addRequest(request);
@@ -287,7 +292,7 @@ public final class PruebaDisco {
             sim.iniciar();
             esperar(() -> request.getResult() != null);
             sim.pausar();
-            comprobar(sim.getDisco().pollCompleted().requestId() == request.getId()
+            comprobar(request.getResult().requestId() == request.getId()
                     && sim.getDisco().pollCompleted() == null && sim.getDisco().getTotalRequestsServed() == 1,
                     "Reanudar no pierde ni duplica solicitudes.");
         } finally {

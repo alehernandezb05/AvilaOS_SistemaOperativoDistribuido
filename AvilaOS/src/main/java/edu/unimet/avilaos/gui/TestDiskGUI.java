@@ -1,12 +1,13 @@
 package edu.unimet.avilaos.gui;
 
-import edu.unimet.avilaos.cluster.Simulador;
-import edu.unimet.avilaos.config.Configuracion;
+import edu.unimet.avilaos.cluster.Computador;
+import edu.unimet.avilaos.hardware.Reloj;
 import edu.unimet.avilaos.hardware.disco.DiskRequest;
 import edu.unimet.avilaos.hardware.disco.DiskScheduler;
 import edu.unimet.avilaos.hardware.disco.DiskSnapshot;
 import edu.unimet.avilaos.hardware.disco.enums.DiskOperation;
 import edu.unimet.avilaos.hardware.disco.enums.DiskPolicy;
+import edu.unimet.avilaos.so.politicas.FCFS;
 import java.awt.BorderLayout;
 import java.awt.FlowLayout;
 import java.awt.GridLayout;
@@ -24,8 +25,8 @@ import javax.swing.Timer;
 /** Prueba del disco del computador; el Timer de Swing solo observa el reloj global. */
 public class TestDiskGUI extends JFrame {
 
-    private final Simulador simulador = new Simulador(Configuracion.porDefecto());
-    private final DiskScheduler scheduler = simulador.getDisco();
+    private final Reloj reloj = new Reloj(50);
+    private final DiskScheduler scheduler = new DiskScheduler(200, 50, 0, DiskPolicy.FIFO);
     private final DiskMapPanel mapPanel = new DiskMapPanel(scheduler);
     private final DiskChartPanel chartPanel = new DiskChartPanel();
     private final JLabel lblHead = new JLabel();
@@ -42,19 +43,20 @@ public class TestDiskGUI extends JFrame {
         setDefaultCloseOperation(DISPOSE_ON_CLOSE);
         setLocationRelativeTo(null);
         setLayout(new BorderLayout());
-        simulador.setDuracionCicloMs(50);
+        new Computador(1, 256, new FCFS(), reloj, scheduler);
         int[] officialBlocks = {95, 180, 34, 119, 11, 123, 62, 64};
         for (int block : officialBlocks) enqueue(block);
 
         JPanel controls = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 8));
         controls.add(new JLabel("Politica:"));
         JComboBox<DiskPolicy> policies = new JComboBox<>(DiskPolicy.values());
-        policies.addActionListener(e -> simulador.cambiarPoliticaDisco((DiskPolicy) policies.getSelectedItem()));
+        policies.addActionListener(e -> scheduler.setPolicy((DiskPolicy) policies.getSelectedItem()));
         controls.add(policies);
         btnStartPause.addActionListener(e -> {
-            if (simulador.estaCorriendo()) simulador.pausar();
-            else simulador.iniciar();
-            btnStartPause.setText(simulador.estaCorriendo() ? "Pausar simulacion" : "Reanudar simulacion");
+            if (reloj.estaCorriendo()) reloj.pausar();
+            else if (reloj.estaPausado()) reloj.reanudar();
+            else reloj.iniciar();
+            btnStartPause.setText(reloj.estaCorriendo() ? "Pausar simulacion" : "Reanudar simulacion");
         });
         controls.add(btnStartPause);
         JButton add = new JButton("Agregar solicitud de prueba");
@@ -62,7 +64,7 @@ public class TestDiskGUI extends JFrame {
         controls.add(add);
         controls.add(new JLabel("Posiciones/ciclo:"));
         JSpinner speed = new JSpinner(new SpinnerNumberModel(1, 1, scheduler.getTotalBlocks(), 1));
-        speed.addChangeListener(e -> simulador.setVelocidadDisco((Integer) speed.getValue()));
+        speed.addChangeListener(e -> scheduler.setSpeed((Integer) speed.getValue()));
         controls.add(speed);
         add(controls, BorderLayout.NORTH);
 
@@ -96,8 +98,6 @@ public class TestDiskGUI extends JFrame {
         lblHead.setText("Ciclo: " + state.cycle() + " | Cabezal: " + state.currentHead() + " [" + state.direction() + "]");
         lblMovement.setText("Desplazamiento: " + state.totalHeadMovement());
         lblRequestsServed.setText("Atendidas: " + state.totalRequestsServed() + " | En cola: " + state.pendingCount());
-        // Esta prueba no tiene PCBs reales; el nucleo consumira los resultados en la integracion de E/S.
-        while (scheduler.pollCompleted() != null) { }
     }
 
     private void agregarNuevaSolicitud() {
@@ -113,7 +113,7 @@ public class TestDiskGUI extends JFrame {
     @Override
     public void dispose() {
         refresh.stop();
-        simulador.detener();
+        reloj.detener();
         super.dispose();
     }
 

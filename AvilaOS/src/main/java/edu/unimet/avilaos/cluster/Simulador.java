@@ -35,6 +35,7 @@ public class Simulador implements ServicioCluster {
     private final Reloj reloj;
     private final Computador[] computadores;
     private final SistemaArchivos sistemaArchivos;
+    private final boolean procesosCargados;
     private final Log log = new Log();
     private final int latenciaRed;       // ciclos que cuesta cada acceso a un buffer remoto
     // Datos con los que se creo cada proceso, para guardarlos como carga inicial
@@ -54,7 +55,8 @@ public class Simulador implements ServicioCluster {
 
     public Simulador(Configuracion config, SistemaArchivos sistemaArchivos) {
         this(config.getDuracionCicloMs(), config.getQuantum(), config.getLatenciaRed(),
-                config.getTamanosRam(), config.getPoliticas(), config.getDisco(), sistemaArchivos);
+                config.getTamanosRam(), config.getPoliticas(), config.getDisco(), sistemaArchivos,
+                config.tieneCargaProcesos());
         for (ConfigBuffer buffer : config.getBuffers()) {
             crearBuffer(buffer.getCapacidad(), buffer.getAnfitrion());
         }
@@ -78,11 +80,12 @@ public class Simulador implements ServicioCluster {
 
     public Simulador(int duracionCicloMs, int quantum, int latenciaRed, int[] tamanosRam,
                      PoliticaPlanificacion[] politicas, ConfigDisco configDisco) {
-        this(duracionCicloMs, quantum, latenciaRed, tamanosRam, politicas, configDisco, null);
+        this(duracionCicloMs, quantum, latenciaRed, tamanosRam, politicas, configDisco, null, false);
     }
 
     private Simulador(int duracionCicloMs, int quantum, int latenciaRed, int[] tamanosRam,
-                      PoliticaPlanificacion[] politicas, ConfigDisco configDisco, SistemaArchivos sistemaArchivos) {
+                      PoliticaPlanificacion[] politicas, ConfigDisco configDisco, SistemaArchivos sistemaArchivos,
+                      boolean procesosCargados) {
         if (tamanosRam.length != MIN_COMPUTADORES) {
             throw new IllegalArgumentException("El Proyecto 2 requiere exactamente un computador.");
         }
@@ -98,16 +101,20 @@ public class Simulador implements ServicioCluster {
         this.quantum = quantum;
         this.latenciaRed = latenciaRed;
         this.sistemaArchivos = sistemaArchivos;
+        this.procesosCargados = procesosCargados;
         this.reloj = new Reloj(duracionCicloMs);
         this.computadores = new Computador[tamanosRam.length];
         int bloques = sistemaArchivos == null ? configDisco.getTotalBlocks() : sistemaArchivos.bloquesDisco();
         int cabezal = sistemaArchivos == null ? configDisco.getInitialHead() : sistemaArchivos.cabezalInicial();
         InitialFile[] archivos = sistemaArchivos == null ? new InitialFile[0] : sistemaArchivos.archivosIniciales();
-        DiskScheduler disco = new DiskScheduler(bloques, cabezal, configDisco.getSwapSizeBlocks(),
-                configDisco.getHeadSpeed(), DiskPolicies.create(configDisco.getInitialPolicy()), archivos);
+        // El JSON de procesos aporta swap y velocidad; la vista previa solo usa la geometría cargada.
+        boolean vistaPreviaArchivos = sistemaArchivos != null && !procesosCargados;
+        DiskScheduler disco = new DiskScheduler(bloques, cabezal, vistaPreviaArchivos ? 0 : configDisco.getSwapSizeBlocks(),
+                vistaPreviaArchivos ? 1 : configDisco.getHeadSpeed(), DiskPolicies.create(configDisco.getInitialPolicy()), archivos);
         // Los IDs de los computadores empiezan en 1; todos comparten el mismo log global
         for (int i = 0; i < tamanosRam.length; i++) {
-            computadores[i] = new Computador(i + 1, tamanosRam[i], crearEstrategia(politicas[i], quantum), reloj, disco);
+            computadores[i] = new Computador(i + 1, tamanosRam[i], crearEstrategia(politicas[i], quantum), reloj,
+                    disco, sistemaArchivos);
             computadores[i].setLog(log);
             computadores[i].setServicio(this);
         }
@@ -125,12 +132,21 @@ public class Simulador implements ServicioCluster {
 
     /** Arranca el reloj la primera vez; despues solo lo reanuda. */
     public synchronized void iniciar() {
+        String impedimento = impedimentoInicio();
+        if (impedimento != null) throw new IllegalStateException(impedimento);
         if (!iniciado) {
             reloj.iniciar();
             iniciado = true;
         } else {
             reloj.reanudar();
         }
+    }
+
+    public String impedimentoInicio() {
+        if (sistemaArchivos == null && !procesosCargados) return "Carga ambos JSON para iniciar.";
+        if (sistemaArchivos == null) return "Falta el JSON del sistema de archivos.";
+        if (!procesosCargados) return "Falta el JSON de procesos.";
+        return null;
     }
 
     public void pausar() {
@@ -210,6 +226,7 @@ public class Simulador implements ServicioCluster {
         DiskSnapshot estado = disco.getSnapshot();
         config.setDisco(new ConfigDisco(disco.getTotalBlocks(), disco.getInitialHead(), disco.getSwapSizeBlocks(),
                 estado.speed(), estado.policy()));
+        config.conservarCargaProcesos(procesosCargados);
         return config;
     }
 

@@ -15,6 +15,10 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
+import static edu.unimet.avilaos.config.CamposJson.entero;
+import static edu.unimet.avilaos.config.CamposJson.objeto;
+import static edu.unimet.avilaos.config.CamposJson.texto;
+
 public final class ArchivoSistemaArchivos {
 
     private static final Gson GSON = new GsonBuilder().setStrictness(Strictness.STRICT).create();
@@ -96,30 +100,5 @@ public final class ArchivoSistemaArchivos {
             throw new IllegalArgumentException("blockChain debe empezar en startBlock en " + ruta + ".");
         }
         return posiciones;
-    }
-
-    private static JsonObject objeto(JsonElement valor, String campo) {
-        if (valor == null || !valor.isJsonObject()) {
-            throw new IllegalArgumentException("Se esperaba un objeto JSON para " + campo + ".");
-        }
-        return valor.getAsJsonObject();
-    }
-
-    private static String texto(JsonObject objeto, String campo) {
-        JsonElement valor = objeto.get(campo);
-        if (valor != null && valor.isJsonPrimitive() && valor.getAsJsonPrimitive().isString()
-                && !valor.getAsString().isBlank()) return valor.getAsString();
-        throw new IllegalArgumentException(campo + " debe ser un texto no vacío.");
-    }
-
-    private static int entero(JsonElement valor, String campo) {
-        if (valor != null && valor.isJsonPrimitive() && valor.getAsJsonPrimitive().isNumber()) {
-            try {
-                return valor.getAsBigDecimal().intValueExact();
-            } catch (NumberFormatException | ArithmeticException e) {
-                throw new IllegalArgumentException(campo + " debe ser un entero dentro del rango permitido.", e);
-            }
-        }
-        throw new IllegalArgumentException(campo + " debe ser un entero.");
     }
 }

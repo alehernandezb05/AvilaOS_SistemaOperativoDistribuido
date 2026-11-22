@@ -6,6 +6,7 @@ import edu.unimet.avilaos.so.archivos.SistemaArchivos.Nodo;
 import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.FlowLayout;
+import java.util.function.Consumer;
 import javax.swing.BorderFactory;
 import javax.swing.JButton;
 import javax.swing.JLabel;
@@ -26,13 +27,17 @@ final class PanelSistemaArchivos extends JPanel {
 
     private final JTree arbol;
     private final JLabel detalle = new JLabel("Selecciona una entrada del árbol.");
+    private final JButton leer = new JButton("Crear proceso READ…");
 
-    PanelSistemaArchivos(SistemaArchivos sistema, String seleccion, Runnable cargar) {
+    PanelSistemaArchivos(SistemaArchivos sistema, String seleccion, Runnable cargar, Consumer<String> alLeer) {
         super(new BorderLayout(6, 6));
         JButton boton = new JButton("Cargar sistema de archivos…");
         boton.addActionListener(e -> cargar.run());
         JPanel controles = new JPanel(new FlowLayout(FlowLayout.LEFT));
         controles.add(boton);
+        leer.setEnabled(false);
+        leer.addActionListener(e -> alLeer.accept(rutaSeleccionada()));
+        controles.add(leer);
         if (sistema == null) controles.add(new JLabel("Sin sistema de archivos cargado"));
         add(controles, BorderLayout.NORTH);
 
@@ -71,11 +76,13 @@ final class PanelSistemaArchivos extends JPanel {
     private void mostrarDetalle() {
         if (arbol.getLastSelectedPathComponent() instanceof Nodo nodo) {
             Entrada entrada = nodo.entrada();
+            leer.setEnabled(entrada.tipo() == SistemaArchivos.Tipo.FILE);
             detalle.setText(entrada.nombre() + "  |  Bloques: " + entrada.bloques()
                     + "  |  Dueño: " + entrada.duenio() + "  |  Permiso: "
                     + (entrada.permiso() == SistemaArchivos.Permiso.PUBLIC ? "Público" : "Privado")
                     + "  |  Primer bloque: " + (entrada.bloques() == 0 ? "—" : entrada.primerBloque()));
         } else {
+            leer.setEnabled(false);
             detalle.setText("Selecciona una entrada del árbol.");
         }
     }

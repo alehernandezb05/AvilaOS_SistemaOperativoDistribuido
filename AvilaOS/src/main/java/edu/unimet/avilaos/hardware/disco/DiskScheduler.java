@@ -8,6 +8,7 @@ import edu.unimet.avilaos.hardware.disco.enums.DiskDirection;
 import edu.unimet.avilaos.hardware.disco.enums.DiskPolicy;
 import edu.unimet.avilaos.hardware.disco.interfaces.IDiskSchedulerPolicy;
 import edu.unimet.avilaos.hardware.disco.interfaces.IDiskSchedulerPolicy.Sweep;
+import edu.unimet.avilaos.so.Log;
 import java.util.concurrent.Semaphore;
 
 /** Motor de disco: una solicitud activa y una transferencia de bloque por ciclo. */
@@ -34,6 +35,7 @@ public class DiskScheduler implements ComponenteReloj {
     private int sweepReturnTarget = -1;
     private long totalHeadMovement;
     private long totalRequestsServed;
+    private volatile Log log;
 
     public DiskScheduler(int totalBlocks, int initialHead, int swapSizeBlocks, DiskPolicy policy) {
         this(totalBlocks, initialHead, swapSizeBlocks, 1, DiskPolicies.create(policy));
@@ -144,6 +146,12 @@ public class DiskScheduler implements ComponenteReloj {
                 }
                 currentRequest.start(cycle);
                 selectedPolicy = activePolicy.getPolicy();
+                Log eventos = log;
+                if (eventos != null) {
+                    eventos.registrar(cycle, "El disco atiende la solicitud " + currentRequest.getId() + " "
+                            + currentRequest.getOperation() + " de P" + currentRequest.getProcessId()
+                            + " en el bloque " + currentRequest.getBlockNumber() + " (" + selectedPolicy + ")");
+                }
                 blockIndex = 0;
             }
             int target = currentRequest.blockAt(blockIndex);
@@ -243,6 +251,7 @@ public class DiskScheduler implements ComponenteReloj {
     }
 
     public DiskStorage getStorage() { return storage; }
+    public void setLog(Log log) { this.log = log; }
     public int getTotalBlocks() { return storage.getTotalBlocks(); }
     public int getInitialHead() { return initialHead; }
     public int getSwapSizeBlocks() { return swapSizeBlocks; }

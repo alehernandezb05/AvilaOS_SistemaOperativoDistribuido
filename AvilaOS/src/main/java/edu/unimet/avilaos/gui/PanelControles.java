@@ -22,6 +22,7 @@ import javax.swing.SwingConstants;
 public class PanelControles extends JPanel {
 
     private final JLabel lblCiclo = new JLabel("Ciclo: 0");
+    private final JLabel lblCarga = new JLabel();
     private final JButton btnIniciar = new JButton("Iniciar");
     private final JButton btnPausar = new JButton("Pausar");
     // Los spinners ya limitan tipo y rango de lo que se puede escribir
@@ -29,7 +30,7 @@ public class PanelControles extends JPanel {
     private final JSpinner spnQuantum = new JSpinner(new SpinnerNumberModel(3, Configuracion.MIN_QUANTUM, Configuracion.MAX_QUANTUM, 1));
     private final JButton btnCrearProceso = new JButton("Crear proceso");
     private final JButton btnGuardarConfig = new JButton("Guardar configuracion");
-    private final JButton btnCargarConfig = new JButton("Cargar configuracion");
+    private final JButton btnCargarConfig = new JButton("Cargar procesos…");
 
     public PanelControles() {
         super(new FlowLayout(FlowLayout.LEFT, 8, 4));
@@ -52,6 +53,7 @@ public class PanelControles extends JPanel {
         add(separador());
         add(btnGuardarConfig);
         add(btnCargarConfig);
+        add(lblCarga);
 
         btnPausar.setEnabled(false);
     }
@@ -67,9 +69,10 @@ public class PanelControles extends JPanel {
     }
 
     /** Habilita Iniciar o Pausar segun si la simulacion esta corriendo. */
-    public void setCorriendo(boolean corriendo) {
-        btnIniciar.setEnabled(!corriendo);
+    public void setCorriendo(boolean corriendo, String impedimento) {
+        btnIniciar.setEnabled(!corriendo && impedimento == null);
         btnPausar.setEnabled(corriendo);
+        lblCarga.setText(impedimento);
     }
 
     /** Muestra los valores actuales sin avisar a los listeners (llamar antes de conectarlos). */

@@ -5,6 +5,7 @@ import edu.unimet.avilaos.cluster.Simulador;
 import edu.unimet.avilaos.hardware.CPU;
 import edu.unimet.avilaos.so.Buffer;
 import edu.unimet.avilaos.so.EstadoProceso;
+import edu.unimet.avilaos.so.MotivoTerminacion;
 import edu.unimet.avilaos.so.PCB;
 
 public final class CalculadorMetricas {
@@ -91,6 +92,7 @@ public final class CalculadorMetricas {
                                             long ocupada, long totales) {
         int terminados = 0;
         int completados = 0;
+        int vencidos = 0;
         long sumaRespuesta = 0;
         int conRespuesta = 0;
         double sumaX = 0;
@@ -102,6 +104,8 @@ public final class CalculadorMetricas {
                 terminados++;
                 if (p.cumplioDeadline()) {
                     completados++;
+                } else if (p.getMotivoTerminacion() == MotivoTerminacion.DEADLINE_VENCIDO) {
+                    vencidos++;
                 }
             }
             if (p.getCicloPrimeraEjecucion() >= 0) {
@@ -122,7 +126,8 @@ public final class CalculadorMetricas {
         double throughput = ciclo > 0 ? (double) completados / ciclo : 0;
         double utilizacion = totales > 0 ? 100.0 * ocupada / totales : 0;
         double respuesta = conRespuesta > 0 ? (double) sumaRespuesta / conRespuesta : Double.NaN;
-        double cumplimiento = terminados > 0 ? 100.0 * completados / terminados : Double.NaN;
+        int conResultadoDePlazo = completados + vencidos;
+        double cumplimiento = conResultadoDePlazo > 0 ? 100.0 * completados / conResultadoDePlazo : Double.NaN;
         double equidad = (n > 0 && sumaX2 > 0) ? (sumaX * sumaX) / (n * sumaX2) : Double.NaN;
         return new ResumenMetricas(nombre, terminados, completados, throughput, utilizacion,
                 respuesta, cumplimiento, equidad);
