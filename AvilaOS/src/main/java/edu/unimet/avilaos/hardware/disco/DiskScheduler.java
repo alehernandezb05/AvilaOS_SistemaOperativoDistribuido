@@ -3,6 +3,7 @@ package edu.unimet.avilaos.hardware.disco;
 import edu.unimet.avilaos.estructuras.Cola;
 import edu.unimet.avilaos.estructuras.Lista;
 import edu.unimet.avilaos.hardware.ComponenteReloj;
+import edu.unimet.avilaos.hardware.disco.DiskStorage.InitialFile;
 import edu.unimet.avilaos.hardware.disco.enums.DiskDirection;
 import edu.unimet.avilaos.hardware.disco.enums.DiskPolicy;
 import edu.unimet.avilaos.hardware.disco.interfaces.IDiskSchedulerPolicy;
@@ -14,7 +15,7 @@ public class DiskScheduler implements ComponenteReloj {
 
     public static final int MAX_BLOCKS = 500;
     private static final System.Logger LOGGER = System.getLogger(DiskScheduler.class.getName());
-    private final DiskBlock[] blocks;
+    private final DiskStorage storage;
     private final int initialHead;
     private final int swapSizeBlocks;
     private final Lista<DiskRequest> requestQueue = new Lista<>();
@@ -40,6 +41,11 @@ public class DiskScheduler implements ComponenteReloj {
 
     public DiskScheduler(int totalBlocks, int initialHead, int swapSizeBlocks,
                          int speed, IDiskSchedulerPolicy policy) {
+        this(totalBlocks, initialHead, swapSizeBlocks, speed, policy, new InitialFile[0]);
+    }
+
+    public DiskScheduler(int totalBlocks, int initialHead, int swapSizeBlocks,
+                         int speed, IDiskSchedulerPolicy policy, InitialFile... initialFiles) {
         if (totalBlocks < 1 || totalBlocks > MAX_BLOCKS) {
             throw new IllegalArgumentException("El disco debe tener entre 1 y " + MAX_BLOCKS + " bloques.");
         }
@@ -56,8 +62,7 @@ public class DiskScheduler implements ComponenteReloj {
         this.swapSizeBlocks = swapSizeBlocks;
         this.speed = speed;
         this.activePolicy = policy;
-        this.blocks = new DiskBlock[totalBlocks];
-        for (int i = 0; i < totalBlocks; i++) blocks[i] = new DiskBlock(i);
+        this.storage = new DiskStorage(totalBlocks, swapSizeBlocks, initialFiles);
     }
 
     private static void validatePolicy(IDiskSchedulerPolicy policy) {
@@ -85,7 +90,7 @@ public class DiskScheduler implements ComponenteReloj {
     }
 
     public void setSpeed(int speed) {
-        validateSpeed(speed, blocks.length);
+        validateSpeed(speed, getTotalBlocks());
         mutex.acquireUninterruptibly();
         try {
             this.speed = speed;
@@ -98,7 +103,7 @@ public class DiskScheduler implements ComponenteReloj {
     public boolean addRequest(DiskRequest request) {
         if (request == null) throw new IllegalArgumentException("Falta la solicitud.");
         for (int block : request.getBlockNumbers()) {
-            if (block >= blocks.length) throw new IllegalArgumentException("La solicitud sale del disco.");
+            if (block >= getTotalBlocks()) throw new IllegalArgumentException("La solicitud sale del disco.");
         }
         try {
             mutex.acquire();
@@ -159,7 +164,7 @@ public class DiskScheduler implements ComponenteReloj {
     }
 
     private void advanceSweep() {
-        Sweep sweep = activePolicy.sweepWithoutRequest(blocks.length - 1, currentDirection);
+        Sweep sweep = activePolicy.sweepWithoutRequest(getTotalBlocks() - 1, currentDirection);
         if (sweep == null) return;
         boolean alreadyAtTarget = currentHead == sweep.targetBlock();
         if (!alreadyAtTarget) totalHeadMovement += moveHeadToward(sweep.targetBlock());
@@ -222,23 +227,9 @@ public class DiskScheduler implements ComponenteReloj {
         }
     }
 
-    /** Copias para dibujar; la vista no puede asignar bloques por su cuenta. */
+    /** Copia del mapa con bloques inmutables para los observadores. */
     public DiskBlock[] getBlocks() {
-        mutex.acquireUninterruptibly();
-        try {
-            DiskBlock[] copy = new DiskBlock[blocks.length];
-            for (int i = 0; i < copy.length; i++) {
-                DiskBlock block = blocks[i];
-                copy[i] = new DiskBlock(block.getBlockNumber());
-                copy[i].setOccupied(block.isOccupied());
-                copy[i].setOwnerName(block.getOwnerName());
-                copy[i].setContentType(block.getContentType());
-                copy[i].setDamaged(block.isDamaged());
-            }
-            return copy;
-        } finally {
-            mutex.release();
-        }
+        return storage.getBlocks();
     }
 
     public long getServedCount(DiskPolicy policy) {
@@ -251,7 +242,8 @@ public class DiskScheduler implements ComponenteReloj {
         }
     }
 
-    public int getTotalBlocks() { return blocks.length; }
+    public DiskStorage getStorage() { return storage; }
+    public int getTotalBlocks() { return storage.getTotalBlocks(); }
     public int getInitialHead() { return initialHead; }
     public int getSwapSizeBlocks() { return swapSizeBlocks; }
     public int getCurrentHead() { return getSnapshot().currentHead(); }
