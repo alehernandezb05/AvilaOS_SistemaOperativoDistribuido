@@ -6,12 +6,14 @@ import edu.unimet.avilaos.hardware.ComponenteReloj;
 import edu.unimet.avilaos.hardware.disco.enums.DiskDirection;
 import edu.unimet.avilaos.hardware.disco.enums.DiskPolicy;
 import edu.unimet.avilaos.hardware.disco.interfaces.IDiskSchedulerPolicy;
+import edu.unimet.avilaos.hardware.disco.interfaces.IDiskSchedulerPolicy.Sweep;
 import java.util.concurrent.Semaphore;
 
 /** Motor de disco: una solicitud activa y una transferencia de bloque por ciclo. */
 public class DiskScheduler implements ComponenteReloj {
 
     public static final int MAX_BLOCKS = 500;
+    private static final System.Logger LOGGER = System.getLogger(DiskScheduler.class.getName());
     private final DiskBlock[] blocks;
     private final int initialHead;
     private final int swapSizeBlocks;
@@ -123,21 +125,20 @@ public class DiskScheduler implements ComponenteReloj {
         try {
             if (cycle <= currentCycle) return;
             currentCycle = cycle;
-            if (currentRequest == null && !requestQueue.estaVacia()) {
+            if (currentRequest == null) {
+                if (requestQueue.estaVacia()) return;
                 currentRequest = activePolicy.selectNextRequest(requestQueue, currentHead, currentDirection);
-                if (currentRequest != null) {
-                    currentRequest.start(cycle);
-                    selectedPolicy = activePolicy.getPolicy();
-                    blockIndex = 0;
+                if (currentRequest == null) {
+                    advanceSweep();
+                    return;
                 }
+                currentRequest.start(cycle);
+                selectedPolicy = activePolicy.getPolicy();
+                blockIndex = 0;
             }
-            if (currentRequest == null) return;
             int target = currentRequest.blockAt(blockIndex);
             if (currentHead != target) {
-                int distance = Math.min(speed, Math.abs(target - currentHead));
-                currentDirection = target > currentHead ? DiskDirection.UP : DiskDirection.DOWN;
-                currentHead += target > currentHead ? distance : -distance;
-                totalHeadMovement += distance;
+                moveHeadToward(target);
                 return; // La transferencia ocupa otro ciclo, incluso si acaba de llegar.
             }
             blockIndex++;
@@ -150,6 +151,25 @@ public class DiskScheduler implements ComponenteReloj {
         } finally {
             mutex.release();
         }
+    }
+
+    private void advanceSweep() {
+        Sweep sweep = activePolicy.sweepWithoutRequest(blocks.length - 1, currentDirection);
+        if (sweep == null) return;
+        if (currentHead != sweep.targetBlock()) moveHeadToward(sweep.targetBlock());
+        if (currentHead == sweep.targetBlock() && currentDirection != sweep.directionOnArrival()) {
+            DiskDirection previousDirection = currentDirection;
+            currentDirection = sweep.directionOnArrival();
+            LOGGER.log(System.Logger.Level.INFO, "{0} cambia de {1} a {2} en el bloque {3}, ciclo {4}.",
+                    activePolicy.getPolicy(), previousDirection, currentDirection, currentHead, currentCycle);
+        }
+    }
+
+    private void moveHeadToward(int target) {
+        int distance = Math.min(speed, Math.abs(target - currentHead));
+        currentDirection = target > currentHead ? DiskDirection.UP : DiskDirection.DOWN;
+        currentHead += currentDirection == DiskDirection.UP ? distance : -distance;
+        totalHeadMovement += distance;
     }
 
     /** Cada finalizacion se entrega una vez; el consumidor resuelve el PCB fuera del semaforo. */

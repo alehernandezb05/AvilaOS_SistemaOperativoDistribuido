@@ -35,20 +35,16 @@ public class ScanDiskSchedulerPolicy implements IDiskSchedulerPolicy {
             }
         }
 
-        if (best == null) {
-            for (int i = 0; i < queue.getTamano(); i++) {
-                DiskRequest req = queue.obtener(i);
-                int distance = Math.abs(req.getBlockNumber() - currentHead);
-                if (distance < minDistance) {
-                    minDistance = distance;
-                    best = req;
-                }
-            }
-        }
-
         if (best != null) {
             queue.remover(best);
         }
         return best;
+    }
+
+    @Override
+    public Sweep sweepWithoutRequest(int lastBlock, DiskDirection direction) {
+        return direction == DiskDirection.UP
+                ? new Sweep(lastBlock, DiskDirection.DOWN)
+                : new Sweep(0, DiskDirection.UP);
     }
 }

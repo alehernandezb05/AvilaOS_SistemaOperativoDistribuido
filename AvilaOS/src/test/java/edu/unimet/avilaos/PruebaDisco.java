@@ -46,6 +46,7 @@ public final class PruebaDisco {
         System.out.println("OK: disco gobernado por el reloj global.");
         transferencia();
         politicas();
+        scan();
         inyeccionYCambio();
         validacion();
         pausaCompartida();
@@ -98,8 +99,10 @@ public final class PruebaDisco {
     private static void recorrido(DiskPolicy policy, int head, int[] blocks, int[] order, long movement) {
         DiskScheduler disk = new DiskScheduler(200, head, 0, policy);
         for (int i = 0; i < blocks.length; i++) disk.addRequest(lectura(i + 1, blocks[i]));
+        boolean reachedEnd = false;
         for (int cycle = 1; cycle <= 3000 && disk.getTotalRequestsServed() < blocks.length; cycle++) {
             disk.alCiclo(cycle);
+            reachedEnd |= disk.getCurrentHead() == 199;
         }
         for (int process : order) {
             DiskCompletion completion = disk.pollCompleted();
@@ -107,8 +110,55 @@ public final class PruebaDisco {
         }
         comprobar(disk.getTotalHeadMovement() == movement, "Desplazamiento incorrecto de " + policy
                 + ": " + disk.getTotalHeadMovement());
+        comprobar(policy != DiskPolicy.SCAN || reachedEnd, "SCAN debe mostrar el cabezal en 199.");
         comprobar(disk.getTotalRequestsServed() == blocks.length && disk.pollCompleted() == null,
                 "Cada solicitud debe terminar exactamente una vez.");
+    }
+
+    private static void scan() {
+        recorrido(DiskPolicy.SCAN, 50, new int[] {82, 17, 43, 140, 24, 16, 190},
+                new int[] {1, 4, 7, 3, 5, 2, 6}, 332);
+        recorrido(DiskPolicy.SCAN, 50, new int[] {95, 180, 34, 119, 11, 123, 62, 64},
+                new int[] {7, 8, 1, 4, 6, 2, 3, 5}, 337);
+
+        DiskScheduler disk = new DiskScheduler(10, 7, 0, 2, DiskPolicies.create(DiskPolicy.SCAN));
+        disk.alCiclo(1);
+        comprobar(disk.getCurrentHead() == 7 && disk.getTotalHeadMovement() == 0,
+                "SCAN debe quedar quieto con la cola vacia.");
+        disk.addRequest(lectura(1, 7));
+        disk.addRequest(lectura(2, 4));
+        disk.alCiclo(2);
+        comprobar(disk.pollCompleted().processId() == 1, "Atiende el bloque bajo el cabezal primero.");
+        disk.alCiclo(3);
+        DiskSnapshot atEnd = disk.getSnapshot();
+        comprobar(atEnd.currentHead() == 9 && atEnd.direction() == DiskDirection.DOWN
+                && atEnd.activeRequestId() == -1 && atEnd.pendingCount() == 1
+                && atEnd.totalRequestsServed() == 1 && disk.pollCompleted() == null,
+                "El giro en el extremo no debe seleccionar ni completar una solicitud.");
+        disk.alCiclo(4);
+        disk.alCiclo(5);
+        disk.alCiclo(6);
+        disk.alCiclo(7);
+        comprobar(disk.pollCompleted().processId() == 2 && disk.getCurrentHead() == 4,
+                "El barrido descendente atiende la solicitud pendiente.");
+
+        disk.addRequest(lectura(3, 6));
+        disk.alCiclo(8); // 4 -> 2 hacia el extremo inferior.
+        disk.addRequest(lectura(4, 1));
+        disk.alCiclo(9);
+        comprobar(disk.getCurrentHead() == 1 && disk.getCurrentDirection() == DiskDirection.DOWN,
+                "Una llegada por delante se atiende durante el barrido al extremo.");
+        disk.alCiclo(10);
+        comprobar(disk.pollCompleted().processId() == 4, "La llegada durante el barrido termina primero.");
+        disk.alCiclo(11);
+        comprobar(disk.getCurrentHead() == 0 && disk.getCurrentDirection() == DiskDirection.UP,
+                "SCAN invierte en el extremo inferior sin sobrepasarlo.");
+        for (int cycle = 12; cycle <= 16; cycle++) disk.alCiclo(cycle);
+        comprobar(disk.getCurrentHead() == 6 && disk.pollCompleted().processId() == 3
+                && disk.getServedCount(DiskPolicy.SCAN) == 4 && disk.getSnapshot().pendingCount() == 0
+                && disk.pollCompleted() == null && disk.getTotalHeadMovement() == 17,
+                "Las llegadas conservan su identidad y los extremos solo suman desplazamiento.");
+        System.out.println("OK: SCAN, extremos fisicos, casos oficiales y llegadas durante el barrido.");
     }
 
     private static void inyeccionYCambio() {
