@@ -48,8 +48,7 @@ public class TestDiskGUI extends JFrame {
 
         JPanel controls = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 8));
         controls.add(new JLabel("Politica:"));
-        JComboBox<DiskPolicy> policies = new JComboBox<>(
-                new DiskPolicy[] {DiskPolicy.FIFO, DiskPolicy.SSTF, DiskPolicy.SCAN});
+        JComboBox<DiskPolicy> policies = new JComboBox<>(DiskPolicy.values());
         policies.addActionListener(e -> simulador.cambiarPoliticaDisco((DiskPolicy) policies.getSelectedItem()));
         controls.add(policies);
         btnStartPause.addActionListener(e -> {

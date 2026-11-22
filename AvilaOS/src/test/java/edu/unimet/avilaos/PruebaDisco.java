@@ -47,6 +47,7 @@ public final class PruebaDisco {
         transferencia();
         politicas();
         scan();
+        cScan();
         inyeccionYCambio();
         validacion();
         pausaCompartida();
@@ -100,9 +101,12 @@ public final class PruebaDisco {
         DiskScheduler disk = new DiskScheduler(200, head, 0, policy);
         for (int i = 0; i < blocks.length; i++) disk.addRequest(lectura(i + 1, blocks[i]));
         boolean reachedEnd = false;
+        boolean returnedToStart = false;
         for (int cycle = 1; cycle <= 3000 && disk.getTotalRequestsServed() < blocks.length; cycle++) {
             disk.alCiclo(cycle);
-            reachedEnd |= disk.getCurrentHead() == 199;
+            int position = disk.getCurrentHead();
+            reachedEnd |= position == 199;
+            returnedToStart |= reachedEnd && position == 0;
         }
         for (int process : order) {
             DiskCompletion completion = disk.pollCompleted();
@@ -111,6 +115,7 @@ public final class PruebaDisco {
         comprobar(disk.getTotalHeadMovement() == movement, "Desplazamiento incorrecto de " + policy
                 + ": " + disk.getTotalHeadMovement());
         comprobar(policy != DiskPolicy.SCAN || reachedEnd, "SCAN debe mostrar el cabezal en 199.");
+        comprobar(policy != DiskPolicy.C_SCAN || returnedToStart, "C-SCAN debe visitar 199 y luego 0.");
         comprobar(disk.getTotalRequestsServed() == blocks.length && disk.pollCompleted() == null,
                 "Cada solicitud debe terminar exactamente una vez.");
     }
@@ -159,6 +164,43 @@ public final class PruebaDisco {
                 && disk.pollCompleted() == null && disk.getTotalHeadMovement() == 17,
                 "Las llegadas conservan su identidad y los extremos solo suman desplazamiento.");
         System.out.println("OK: SCAN, extremos fisicos, casos oficiales y llegadas durante el barrido.");
+    }
+
+    private static void cScan() {
+        recorrido(DiskPolicy.C_SCAN, 50, new int[] {82, 17, 43, 140, 24, 16, 190},
+                new int[] {1, 4, 7, 6, 2, 5, 3}, 192);
+        recorrido(DiskPolicy.C_SCAN, 50, new int[] {95, 180, 34, 119, 11, 123, 62, 64},
+                new int[] {7, 8, 1, 4, 6, 2, 5, 3}, 183);
+
+        DiskScheduler disk = new DiskScheduler(10, 5, 0, 2, DiskPolicies.create(DiskPolicy.C_SCAN));
+        disk.addRequest(lectura(1, 2));
+        disk.alCiclo(1);
+        disk.alCiclo(2);
+        comprobar(disk.getCurrentHead() == 9 && disk.getTotalHeadMovement() == 4,
+                "El barrido hasta el extremo superior si cuenta.");
+        int[] returnPositions = {7, 5, 3, 1, 0};
+        for (int i = 0; i < returnPositions.length; i++) {
+            disk.alCiclo(3 + i);
+            DiskSnapshot state = disk.getSnapshot();
+            comprobar(state.currentHead() == returnPositions[i] && state.direction() == DiskDirection.DOWN
+                    && state.totalHeadMovement() == 4 && state.activeRequestId() == -1
+                    && state.totalRequestsServed() == 0 && disk.pollCompleted() == null,
+                    "El retorno mueve el cabezal sin sumar desplazamiento ni atender solicitudes.");
+            if (i == 0) {
+                disk.addRequest(lectura(2, 7));
+                disk.addRequest(lectura(3, 0));
+            }
+        }
+        disk.alCiclo(8);
+        DiskCompletion first = disk.pollCompleted();
+        comprobar(first != null && first.processId() == 3 && first.startCycle() - first.arrivalCycle() == 5,
+                "Al volver a 0 se reanuda el servicio ascendente y la espera incluye el retorno.");
+        for (int cycle = 9; cycle <= 14; cycle++) disk.alCiclo(cycle);
+        comprobar(disk.pollCompleted().processId() == 1 && disk.pollCompleted().processId() == 2
+                && disk.pollCompleted() == null && disk.getServedCount(DiskPolicy.C_SCAN) == 3
+                && disk.getTotalHeadMovement() == 11,
+                "Cada solicitud real termina una vez en orden ascendente.");
+        System.out.println("OK: C-SCAN, casos oficiales y retorno fisico sin atencion ni desplazamiento.");
     }
 
     private static void inyeccionYCambio() {

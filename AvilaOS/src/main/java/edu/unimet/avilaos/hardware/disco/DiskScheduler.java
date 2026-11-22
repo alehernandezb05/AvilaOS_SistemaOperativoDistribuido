@@ -30,6 +30,7 @@ public class DiskScheduler implements ComponenteReloj {
     private DiskRequest currentRequest;
     private DiskPolicy selectedPolicy;
     private int blockIndex;
+    private int sweepReturnTarget = -1;
     private long totalHeadMovement;
     private long totalRequestsServed;
 
@@ -125,6 +126,10 @@ public class DiskScheduler implements ComponenteReloj {
         try {
             if (cycle <= currentCycle) return;
             currentCycle = cycle;
+            if (sweepReturnTarget >= 0) {
+                advanceSweepReturn();
+                return;
+            }
             if (currentRequest == null) {
                 if (requestQueue.estaVacia()) return;
                 currentRequest = activePolicy.selectNextRequest(requestQueue, currentHead, currentDirection);
@@ -138,7 +143,7 @@ public class DiskScheduler implements ComponenteReloj {
             }
             int target = currentRequest.blockAt(blockIndex);
             if (currentHead != target) {
-                moveHeadToward(target);
+                totalHeadMovement += moveHeadToward(target);
                 return; // La transferencia ocupa otro ciclo, incluso si acaba de llegar.
             }
             blockIndex++;
@@ -156,8 +161,13 @@ public class DiskScheduler implements ComponenteReloj {
     private void advanceSweep() {
         Sweep sweep = activePolicy.sweepWithoutRequest(blocks.length - 1, currentDirection);
         if (sweep == null) return;
-        if (currentHead != sweep.targetBlock()) moveHeadToward(sweep.targetBlock());
-        if (currentHead == sweep.targetBlock() && currentDirection != sweep.directionOnArrival()) {
+        boolean alreadyAtTarget = currentHead == sweep.targetBlock();
+        if (!alreadyAtTarget) totalHeadMovement += moveHeadToward(sweep.targetBlock());
+        if (currentHead != sweep.targetBlock()) return;
+        if (sweep.returnBlock() >= 0) {
+            sweepReturnTarget = sweep.returnBlock();
+            if (alreadyAtTarget) advanceSweepReturn();
+        } else if (currentDirection != sweep.directionOnArrival()) {
             DiskDirection previousDirection = currentDirection;
             currentDirection = sweep.directionOnArrival();
             LOGGER.log(System.Logger.Level.INFO, "{0} cambia de {1} a {2} en el bloque {3}, ciclo {4}.",
@@ -165,11 +175,18 @@ public class DiskScheduler implements ComponenteReloj {
         }
     }
 
-    private void moveHeadToward(int target) {
+    // El retorno circular ocupa ciclos a la velocidad del disco y prolonga la espera.
+    // Durante este trayecto no se seleccionan solicitudes ni se acumula desplazamiento.
+    private void advanceSweepReturn() {
+        if (currentHead != sweepReturnTarget) moveHeadToward(sweepReturnTarget);
+        if (currentHead == sweepReturnTarget) sweepReturnTarget = -1;
+    }
+
+    private int moveHeadToward(int target) {
         int distance = Math.min(speed, Math.abs(target - currentHead));
         currentDirection = target > currentHead ? DiskDirection.UP : DiskDirection.DOWN;
         currentHead += currentDirection == DiskDirection.UP ? distance : -distance;
-        totalHeadMovement += distance;
+        return distance;
     }
 
     /** Cada finalizacion se entrega una vez; el consumidor resuelve el PCB fuera del semaforo. */

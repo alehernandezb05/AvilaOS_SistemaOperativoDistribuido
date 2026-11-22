@@ -32,20 +32,14 @@ public class CScanDiskSchedulerPolicy implements IDiskSchedulerPolicy {
             }
         }
 
-        if (best == null) {
-            int lowestBlock = Integer.MAX_VALUE;
-            for (int i = 0; i < queue.getTamano(); i++) {
-                DiskRequest req = queue.obtener(i);
-                if (req.getBlockNumber() < lowestBlock) {
-                    lowestBlock = req.getBlockNumber();
-                    best = req;
-                }
-            }
-        }
-
         if (best != null) {
             queue.remover(best);
         }
         return best;
+    }
+
+    @Override
+    public Sweep sweepWithoutRequest(int lastBlock, DiskDirection direction) {
+        return new Sweep(lastBlock, DiskDirection.UP, 0);
     }
 }
