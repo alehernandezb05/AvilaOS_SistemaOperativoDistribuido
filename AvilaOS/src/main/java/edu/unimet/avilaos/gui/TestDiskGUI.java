@@ -37,7 +37,7 @@ public class TestDiskGUI extends JFrame {
     private int nextProcessId = 1;
 
     public TestDiskGUI() {
-        super("AvilaOS - Prueba de disco con reloj global (FIFO/SSTF)");
+        super("AvilaOS - Prueba de disco con reloj global");
         setSize(1100, 750);
         setDefaultCloseOperation(DISPOSE_ON_CLOSE);
         setLocationRelativeTo(null);
@@ -48,7 +48,8 @@ public class TestDiskGUI extends JFrame {
 
         JPanel controls = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 8));
         controls.add(new JLabel("Politica:"));
-        JComboBox<DiskPolicy> policies = new JComboBox<>(new DiskPolicy[] {DiskPolicy.FIFO, DiskPolicy.SSTF});
+        JComboBox<DiskPolicy> policies = new JComboBox<>(
+                new DiskPolicy[] {DiskPolicy.FIFO, DiskPolicy.SSTF, DiskPolicy.SCAN});
         policies.addActionListener(e -> simulador.cambiarPoliticaDisco((DiskPolicy) policies.getSelectedItem()));
         controls.add(policies);
         btnStartPause.addActionListener(e -> {
@@ -76,7 +77,7 @@ public class TestDiskGUI extends JFrame {
         status.add(lblRequestsServed);
         add(status, BorderLayout.SOUTH);
 
-        refresh = new Timer(100, e -> actualizar());
+        refresh = new Timer(25, e -> actualizar());
         refresh.start();
         actualizar();
     }
