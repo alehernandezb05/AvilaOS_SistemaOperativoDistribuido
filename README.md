@@ -24,6 +24,16 @@ cambio conserva la E/S temporal de los procesos del Proyecto 1; el disco ya
 comparte su reloj, pero la conexion de los PCBs a las solicitudes corresponde
 a la integracion de E/S.
 
+Para explorar el ejemplo del enunciado, abre la pestaña **Sistema de archivos**
+y carga `escenarios/08_sistema_archivos.json`. La pestaña muestra la jerarquía,
+los datos de la entrada seleccionada y la tabla de asignación. El JSON aporta
+el tamaño del disco y el cabezal inicial. La configuración del computador
+aporta el tamaño de swap, que debe caber junto con los archivos.
+
+Para archivos de un bloque basta con `startBlock` y `blocks`. Los archivos
+de varios bloques incluyen también `blockChain`, un arreglo ordenado con
+todas las posiciones que empieza en `startBlock` y tiene `blocks` elementos.
+
 ## Verificacion
 
 Desde la carpeta `AvilaOS`, con Java 25 y Maven disponibles:

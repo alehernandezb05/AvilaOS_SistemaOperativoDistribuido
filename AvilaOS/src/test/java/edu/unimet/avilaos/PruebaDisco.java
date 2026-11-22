@@ -60,6 +60,7 @@ public final class PruebaDisco {
         configuracion();
         asignacionEncadenada();
         reservaSwap();
+        PruebaSistemaArchivos.ejecutar();
     }
 
     private static void transferencia() {

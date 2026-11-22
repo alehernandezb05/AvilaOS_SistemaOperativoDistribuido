@@ -30,8 +30,9 @@ public class AvilaOS {
             Configuracion config = dialogo.getConfiguracion();
             if (config == null) {
                 System.exit(0);
+                return;
             }
-            abrirSimulacion(config);
+            abrirSimulacion(new Simulador(config), null);
         });
     }
 
@@ -39,13 +40,12 @@ public class AvilaOS {
      * Crea el Simulador y su ventana. Al cargar otra configuracion desde la ventana,
      * se detiene esta simulacion, se cierra su ventana y se abre una nueva.
      */
-    private static void abrirSimulacion(Configuracion config) {
-        Simulador simulador = new Simulador(config);
+    private static void abrirSimulacion(Simulador simulador, String rutaSeleccionada) {
         VentanaPrincipal[] ventana = new VentanaPrincipal[1];
-        ventana[0] = new VentanaPrincipal(simulador, nueva -> {
+        ventana[0] = new VentanaPrincipal(simulador, rutaSeleccionada, (nueva, seleccion) -> {
             simulador.detener();
             ventana[0].dispose();
-            abrirSimulacion(nueva);
+            abrirSimulacion(nueva, seleccion);
         });
         ventana[0].setVisible(true);
     }
