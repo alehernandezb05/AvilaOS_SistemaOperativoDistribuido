@@ -23,6 +23,7 @@ public class Configuracion {
     public static final int MIN_RAM = 1;
     public static final int MAX_RAM = 100000;
 
+    private ConfigDisco disco;
     private int duracionCicloMs;
     private int quantum;
     private int latenciaRed;           // ciclos que cuesta cada acceso a un buffer remoto
@@ -81,6 +82,7 @@ public class Configuracion {
 
     /** Revisa que todos los valores esten en rango; si no, explica cual falla. */
     public void validar() throws ConfiguracionInvalidaException {
+        getDisco().validar();
         verificarRango("La duracion del ciclo (ms)", duracionCicloMs, MIN_CICLO_MS, MAX_CICLO_MS);
         verificarRango("El quantum", quantum, MIN_QUANTUM, MAX_QUANTUM);
         verificarRango("La latencia de red", latenciaRed, MIN_LATENCIA, MAX_LATENCIA);
@@ -126,6 +128,9 @@ public class Configuracion {
                     campo + " debe estar entre " + min + " y " + max + " (vale " + valor + ").");
         }
     }
+
+    public ConfigDisco getDisco() { return disco == null ? new ConfigDisco() : disco; }
+    public void setDisco(ConfigDisco disco) { this.disco = disco; }
 
     public int getDuracionCicloMs() { return duracionCicloMs; }
     public int getQuantum() { return quantum; }

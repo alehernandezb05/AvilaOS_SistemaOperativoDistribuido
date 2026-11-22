@@ -52,16 +52,25 @@ public class Reloj implements Runnable {
         }
     }
 
-    public void pausar() { pausado = true; }
+    /** Espera el fin del ciclo en curso antes de confirmar la pausa. */
+    public void pausar() {
+        if (Thread.currentThread() == hilo) {
+            pausado = true;
+            return;
+        }
+        mutex.acquireUninterruptibly();
+        try {
+            pausado = true;
+        } finally {
+            mutex.release();
+        }
+    }
     public void reanudar() { pausado = false; }
 
     @Override
     public void run() {
         while (corriendo) {
-            if (!pausado) {
-                cicloActual++;
-                notificarComponentes();
-            }
+            notificarComponentes();
             try {
                 Thread.sleep(duracionCicloMs);
             } catch (InterruptedException e) {
@@ -78,6 +87,8 @@ public class Reloj implements Runnable {
             return;
         }
         try {
+            if (!corriendo || pausado) return;
+            cicloActual++;
             for (int i = 0; i < componentes.getTamano(); i++) {
                 componentes.obtener(i).alCiclo(cicloActual);
             }
@@ -88,6 +99,7 @@ public class Reloj implements Runnable {
 
     public long getCicloActual() { return cicloActual; }
     public int getDuracionCicloMs() { return duracionCicloMs; }
+    public boolean estaCorriendo() { return corriendo && !pausado; }
     public boolean estaPausado() { return pausado; }
 
     /** Se puede cambiar en tiempo de ejecucion. Ignora valores invalidos. */

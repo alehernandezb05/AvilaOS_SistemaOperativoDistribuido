@@ -1,9 +1,12 @@
 package edu.unimet.avilaos.gui;
 
+import edu.unimet.avilaos.cluster.Simulador;
+import edu.unimet.avilaos.config.Configuracion;
+import edu.unimet.avilaos.hardware.disco.DiskRequest;
 import edu.unimet.avilaos.hardware.disco.DiskScheduler;
+import edu.unimet.avilaos.hardware.disco.DiskSnapshot;
+import edu.unimet.avilaos.hardware.disco.enums.DiskOperation;
 import edu.unimet.avilaos.hardware.disco.enums.DiskPolicy;
-import edu.unimet.avilaos.hardware.disco.enums.DiskRequest;
-import edu.unimet.avilaos.hardware.disco.DiskBlock;
 import java.awt.BorderLayout;
 import java.awt.FlowLayout;
 import java.awt.GridLayout;
@@ -13,164 +16,108 @@ import javax.swing.JFrame;
 import javax.swing.JLabel;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
+import javax.swing.JSpinner;
+import javax.swing.SpinnerNumberModel;
 import javax.swing.SwingUtilities;
 import javax.swing.Timer;
 
-/**
- * Ventana de prueba visual para validar la simulación del disco,
- * el movimiento del cabezal y la gráfica de desplazamiento vs. tiempo.
- */
+/** Prueba del disco del computador; el Timer de Swing solo observa el reloj global. */
 public class TestDiskGUI extends JFrame {
 
-    private final DiskScheduler scheduler;
-    private final DiskMapPanel mapPanel;
-    private final DiskChartPanel chartPanel;
-
-    private Timer simulationTimer;
-    private int currentCycle = 0;
-    private boolean isRunning = false;
-
-    // Etiquetas de métricas y controles
-    private final JLabel lblHead;
-    private final JLabel lblMovement;
-    private final JLabel lblRequestsServed;
-    private final JComboBox<DiskPolicy> comboPolicies;
-    private final JButton btnStartPause;
+    private final Simulador simulador = new Simulador(Configuracion.porDefecto());
+    private final DiskScheduler scheduler = simulador.getDisco();
+    private final DiskMapPanel mapPanel = new DiskMapPanel(scheduler);
+    private final DiskChartPanel chartPanel = new DiskChartPanel();
+    private final JLabel lblHead = new JLabel();
+    private final JLabel lblMovement = new JLabel();
+    private final JLabel lblRequestsServed = new JLabel();
+    private final JButton btnStartPause = new JButton("Iniciar simulacion");
+    private final Timer refresh;
+    private long lastCycle = -1;
+    private int nextProcessId = 1;
 
     public TestDiskGUI() {
-        setTitle("ÁvilaOS - Prueba Visual de Planificación de Disco");
-        setSize(1000, 750);
-        setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        super("AvilaOS - Prueba de disco con reloj global (FIFO/SSTF)");
+        setSize(1100, 750);
+        setDefaultCloseOperation(DISPOSE_ON_CLOSE);
         setLocationRelativeTo(null);
         setLayout(new BorderLayout());
+        simulador.setDuracionCicloMs(50);
+        int[] officialBlocks = {95, 180, 34, 119, 11, 123, 62, 64};
+        for (int block : officialBlocks) enqueue(block);
 
-        // Inicializar el disco con 200 bloques y el cabezal inicial en 50 (según el JSON del enunciado)
-        scheduler = new DiskScheduler(200, 50, 100, DiskPolicy.FIFO);
-        cargarSolicitudesDePruebaOficiales();
-
-        mapPanel = new DiskMapPanel(scheduler);
-        chartPanel = new DiskChartPanel();
-
-        // Panel Superior de Controles
-        JPanel controlPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 15, 10));
-
-        controlPanel.add(new JLabel("Política de Disco:"));
-        comboPolicies = new JComboBox<>(DiskPolicy.values());
-        comboPolicies.setSelectedItem(DiskPolicy.FIFO);
-        comboPolicies.addActionListener(e -> {
-            DiskPolicy selected = (DiskPolicy) comboPolicies.getSelectedItem();
-            if (selected != null) {
-                scheduler.setPolicy(selected);
-            }
+        JPanel controls = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 8));
+        controls.add(new JLabel("Politica:"));
+        JComboBox<DiskPolicy> policies = new JComboBox<>(new DiskPolicy[] {DiskPolicy.FIFO, DiskPolicy.SSTF});
+        policies.addActionListener(e -> simulador.cambiarPoliticaDisco((DiskPolicy) policies.getSelectedItem()));
+        controls.add(policies);
+        btnStartPause.addActionListener(e -> {
+            if (simulador.estaCorriendo()) simulador.pausar();
+            else simulador.iniciar();
+            btnStartPause.setText(simulador.estaCorriendo() ? "Pausar simulacion" : "Reanudar simulacion");
         });
-        controlPanel.add(comboPolicies);
+        controls.add(btnStartPause);
+        JButton add = new JButton("Agregar solicitud de prueba");
+        add.addActionListener(e -> agregarNuevaSolicitud());
+        controls.add(add);
+        controls.add(new JLabel("Posiciones/ciclo:"));
+        JSpinner speed = new JSpinner(new SpinnerNumberModel(1, 1, scheduler.getTotalBlocks(), 1));
+        speed.addChangeListener(e -> simulador.setVelocidadDisco((Integer) speed.getValue()));
+        controls.add(speed);
+        add(controls, BorderLayout.NORTH);
 
-        btnStartPause = new JButton("Iniciar Simulación");
-        btnStartPause.addActionListener(e -> toggleSimulation());
-        controlPanel.add(btnStartPause);
+        JPanel center = new JPanel(new GridLayout(2, 1, 5, 5));
+        center.add(mapPanel);
+        center.add(chartPanel);
+        add(center, BorderLayout.CENTER);
+        JPanel status = new JPanel(new FlowLayout());
+        status.add(lblHead);
+        status.add(lblMovement);
+        status.add(lblRequestsServed);
+        add(status, BorderLayout.SOUTH);
 
-        JButton btnAddRequest = new JButton("+ Agregar Solicitud");
-        btnAddRequest.addActionListener(e -> agregarNuevaSolicitud());
-        controlPanel.add(btnAddRequest);
-
-        // Panel Central con Mapa de Bloques y Gráfica JFreeChart
-        JPanel centerPanel = new JPanel(new GridLayout(2, 1, 10, 10));
-        centerPanel.add(mapPanel);
-        centerPanel.add(chartPanel);
-
-        // Panel Inferior con Métricas del Disco
-        JPanel metricsPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 25, 10));
-        lblHead = new JLabel("Cabezal: 50 [UP]");
-        lblMovement = new JLabel("Desplazamiento Total: 0 bloques");
-        lblRequestsServed = new JLabel("Solicitudes Atendidas: 0");
-        metricsPanel.add(lblHead);
-        metricsPanel.add(lblMovement);
-        metricsPanel.add(lblRequestsServed);
-
-        add(controlPanel, BorderLayout.NORTH);
-        add(centerPanel, BorderLayout.CENTER);
-        add(metricsPanel, BorderLayout.SOUTH);
-
-        configurarTimer();
+        refresh = new Timer(100, e -> actualizar());
+        refresh.start();
+        actualizar();
     }
 
-    /**
-     * Carga el caso de prueba oficial del enunciado:
-     * Cabezal inicial en 50 y solicitudes: 95, 180, 34, 119, 11, 123, 62, 64
-     */
-    private void cargarSolicitudesDePruebaOficiales() {
-        int[] bloquesPrueba = {95, 180, 34, 119, 11, 123, 62, 64};
-        for (int b : bloquesPrueba) {
-            scheduler.addRequest(new DiskRequest(b, "Proc_" + b));
+    private void enqueue(int block) {
+        int process = nextProcessId++;
+        scheduler.addRequest(new DiskRequest(process, "Prueba_" + process, DiskOperation.READ, block));
+    }
+
+    private void actualizar() {
+        DiskSnapshot state = scheduler.getSnapshot();
+        mapPanel.repaint();
+        if (state.cycle() > lastCycle) {
+            chartPanel.addDataPoint(state.cycle(), state.totalHeadMovement(), state.policy().name());
+            lastCycle = state.cycle();
         }
-
-        // Marcar visualmente algunos bloques de la prueba como archivos o swap
-        DiskBlock[] blocks = scheduler.getBlocks();
-        blocks[95].setOccupied(true);
-        blocks[95].setOwnerName("config.sys");
-        blocks[95].setContentType("FILE");
-
-        blocks[180].setOccupied(true);
-        blocks[180].setOwnerName("video.mp4");
-        blocks[180].setContentType("FILE");
-
-        blocks[34].setOccupied(true);
-        blocks[34].setOwnerName("notas.txt");
-        blocks[34].setContentType("FILE");
-
-        blocks[11].setOccupied(true);
-        blocks[11].setOwnerName("boot.bin");
-        blocks[11].setContentType("FILE");
-    }
-
-    private void configurarTimer() {
-        // Ejecuta un ciclo de reloj cada 300 ms (según el JSON del proyecto)
-        simulationTimer = new Timer(300, e -> {
-            currentCycle++;
-            scheduler.tick();
-
-            // Repintar interfaz y actualizar la gráfica
-            mapPanel.repaint();
-            chartPanel.addDataPoint(currentCycle, scheduler.getTotalHeadMovement(), scheduler.getActivePolicyEnum().name());
-
-            lblHead.setText("Cabezal: " + scheduler.getCurrentHead() + " [" + scheduler.getCurrentDirection() + "]");
-            lblMovement.setText("Desplazamiento Total: " + scheduler.getTotalHeadMovement() + " bloques");
-            lblRequestsServed.setText("Solicitudes Atendidas: " + scheduler.getTotalRequestsServed());
-        });
-    }
-
-    private void toggleSimulation() {
-        if (isRunning) {
-            simulationTimer.stop();
-            btnStartPause.setText("Reanudar Simulación");
-            isRunning = false;
-        } else {
-            simulationTimer.start();
-            btnStartPause.setText("Pausar Simulación");
-            isRunning = true;
-        }
+        lblHead.setText("Ciclo: " + state.cycle() + " | Cabezal: " + state.currentHead() + " [" + state.direction() + "]");
+        lblMovement.setText("Desplazamiento: " + state.totalHeadMovement());
+        lblRequestsServed.setText("Atendidas: " + state.totalRequestsServed() + " | En cola: " + state.pendingCount());
+        // Esta prueba no tiene PCBs reales; el nucleo consumira los resultados en la integracion de E/S.
+        while (scheduler.pollCompleted() != null) { }
     }
 
     private void agregarNuevaSolicitud() {
-        String input = JOptionPane.showInputDialog(this, "Ingrese el número de bloque (0 - 199):");
-        if (input != null && !input.trim().isEmpty()) {
-            try {
-                int block = Integer.parseInt(input.trim());
-                if (block >= 0 && block < 200) {
-                    scheduler.addRequest(new DiskRequest(block, "Proc_User_" + block));
-                    mapPanel.repaint();
-                } else {
-                    JOptionPane.showMessageDialog(this, "El bloque debe estar entre 0 y 199", "Error", JOptionPane.ERROR_MESSAGE);
-                }
-            } catch (NumberFormatException ex) {
-                JOptionPane.showMessageDialog(this, "Por favor ingrese un número entero válido", "Error", JOptionPane.ERROR_MESSAGE);
-            }
+        String input = JOptionPane.showInputDialog(this, "Bloque (0-" + (scheduler.getTotalBlocks() - 1) + "):");
+        if (input == null) return;
+        try {
+            enqueue(Integer.parseInt(input.trim()));
+        } catch (IllegalArgumentException e) {
+            JOptionPane.showMessageDialog(this, "Bloque invalido: " + e.getMessage(), "Solicitud invalida", JOptionPane.WARNING_MESSAGE);
         }
     }
 
+    @Override
+    public void dispose() {
+        refresh.stop();
+        simulador.detener();
+        super.dispose();
+    }
+
     public static void main(String[] args) {
-        SwingUtilities.invokeLater(() -> {
-            new TestDiskGUI().setVisible(true);
-        });
+        SwingUtilities.invokeLater(() -> new TestDiskGUI().setVisible(true));
     }
 }

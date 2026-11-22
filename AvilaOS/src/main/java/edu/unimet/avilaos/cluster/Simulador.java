@@ -1,6 +1,11 @@
 package edu.unimet.avilaos.cluster;
 
 import edu.unimet.avilaos.config.ConfigProceso;
+import edu.unimet.avilaos.config.ConfigDisco;
+import edu.unimet.avilaos.hardware.disco.DiskScheduler;
+import edu.unimet.avilaos.hardware.disco.DiskPolicies;
+import edu.unimet.avilaos.hardware.disco.DiskSnapshot;
+import edu.unimet.avilaos.hardware.disco.enums.DiskPolicy;
 import edu.unimet.avilaos.config.Configuracion;
 import edu.unimet.avilaos.config.Configuracion.ConfigBuffer;
 import edu.unimet.avilaos.config.Configuracion.ConfigComputador;
@@ -42,7 +47,7 @@ public class Simulador implements ServicioCluster {
      */
     public Simulador(Configuracion config) {
         this(config.getDuracionCicloMs(), config.getQuantum(), config.getLatenciaRed(),
-                config.getTamanosRam(), config.getPoliticas());
+                config.getTamanosRam(), config.getPoliticas(), config.getDisco());
         for (ConfigBuffer buffer : config.getBuffers()) {
             crearBuffer(buffer.getCapacidad(), buffer.getAnfitrion());
         }
@@ -61,6 +66,11 @@ public class Simulador implements ServicioCluster {
      */
     public Simulador(int duracionCicloMs, int quantum, int latenciaRed, int[] tamanosRam,
                      PoliticaPlanificacion[] politicas) {
+        this(duracionCicloMs, quantum, latenciaRed, tamanosRam, politicas, new ConfigDisco());
+    }
+
+    public Simulador(int duracionCicloMs, int quantum, int latenciaRed, int[] tamanosRam,
+                     PoliticaPlanificacion[] politicas, ConfigDisco configDisco) {
         if (tamanosRam.length != MIN_COMPUTADORES) {
             throw new IllegalArgumentException("El Proyecto 2 requiere exactamente un computador.");
         }
@@ -79,7 +89,10 @@ public class Simulador implements ServicioCluster {
         this.computadores = new Computador[tamanosRam.length];
         // Los IDs de los computadores empiezan en 1; todos comparten el mismo log global
         for (int i = 0; i < tamanosRam.length; i++) {
-            computadores[i] = new Computador(i + 1, tamanosRam[i], crearEstrategia(politicas[i], quantum), reloj);
+            DiskScheduler disco = new DiskScheduler(configDisco.getTotalBlocks(), configDisco.getInitialHead(),
+                    configDisco.getSwapSizeBlocks(), configDisco.getHeadSpeed(),
+                    DiskPolicies.create(configDisco.getInitialPolicy()));
+            computadores[i] = new Computador(i + 1, tamanosRam[i], crearEstrategia(politicas[i], quantum), reloj, disco);
             computadores[i].setLog(log);
             computadores[i].setServicio(this);
         }
@@ -177,7 +190,12 @@ public class Simulador implements ServicioCluster {
                 procesos[i] = procesosCreados.obtener(i);
             }
         }
-        return new Configuracion(getDuracionCicloMs(), quantum, latenciaRed, datos, datosBuffers, procesos);
+        Configuracion config = new Configuracion(getDuracionCicloMs(), quantum, latenciaRed, datos, datosBuffers, procesos);
+        DiskScheduler disco = getDisco();
+        DiskSnapshot estado = disco.getSnapshot();
+        config.setDisco(new ConfigDisco(disco.getTotalBlocks(), disco.getInitialHead(), disco.getSwapSizeBlocks(),
+                estado.speed(), estado.policy()));
+        return config;
     }
 
     @Override
@@ -248,10 +266,14 @@ public class Simulador implements ServicioCluster {
         return ids;
     }
 
+    public DiskScheduler getDisco() { return computadores[0].getDisco(); }
+    public void cambiarPoliticaDisco(DiskPolicy politica) { getDisco().setPolicy(politica); }
+    public void setVelocidadDisco(int velocidad) { getDisco().setSpeed(velocidad); }
+
     public Log getLog() { return log; }
     public int getCantidadComputadores() { return computadores.length; }
     public int getQuantum() { return quantum; }
     public long getCicloActual() { return reloj.getCicloActual(); }
     public int getDuracionCicloMs() { return reloj.getDuracionCicloMs(); }
-    public boolean estaCorriendo() { return iniciado && !reloj.estaPausado(); }
+    public boolean estaCorriendo() { return reloj.estaCorriendo(); }
 }

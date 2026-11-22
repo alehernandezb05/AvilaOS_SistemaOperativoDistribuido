@@ -33,7 +33,7 @@ public class DiskChartPanel extends JPanel {
         add(chartPanel, BorderLayout.CENTER);
     }
 
-    public void addDataPoint(int timeCycle, int totalMovement, String policyName) {
+    public void addDataPoint(long timeCycle, long totalMovement, String policyName) {
         dataset.addValue(totalMovement, policyName, String.valueOf(timeCycle));
     }
 
