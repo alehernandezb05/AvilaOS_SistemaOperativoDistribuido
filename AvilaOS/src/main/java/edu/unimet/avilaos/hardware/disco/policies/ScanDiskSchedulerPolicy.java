@@ -22,7 +22,7 @@ public class ScanDiskSchedulerPolicy implements IDiskSchedulerPolicy {
 
         for (int i = 0; i < queue.getTamano(); i++) {
             DiskRequest req = queue.obtener(i);
-            int block = req.getBlockNumber();
+            int block = req.schedulingBlock(currentHead);
             boolean validDirection = (direction == DiskDirection.UP && block >= currentHead)
                     || (direction == DiskDirection.DOWN && block <= currentHead);
 

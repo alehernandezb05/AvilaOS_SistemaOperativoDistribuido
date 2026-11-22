@@ -148,18 +148,22 @@ public class DiskScheduler implements ComponenteReloj {
                 selectedPolicy = activePolicy.getPolicy();
                 Log eventos = log;
                 if (eventos != null) {
+                    String destino = currentRequest.getBlockCount() == 0 ? " para metadatos"
+                            : " en el bloque " + currentRequest.getBlockNumber();
                     eventos.registrar(cycle, "El disco atiende la solicitud " + currentRequest.getId() + " "
                             + currentRequest.getOperation() + " de P" + currentRequest.getProcessId()
-                            + " en el bloque " + currentRequest.getBlockNumber() + " (" + selectedPolicy + ")");
+                            + destino + " (" + selectedPolicy + ")");
                 }
                 blockIndex = 0;
             }
-            int target = currentRequest.blockAt(blockIndex);
-            if (currentHead != target) {
-                totalHeadMovement += moveHeadToward(target);
-                return; // La transferencia ocupa otro ciclo, incluso si acaba de llegar.
+            if (currentRequest.getBlockCount() > 0) {
+                int target = currentRequest.blockAt(blockIndex);
+                if (currentHead != target) {
+                    totalHeadMovement += moveHeadToward(target);
+                    return; // La transferencia ocupa otro ciclo, incluso si acaba de llegar.
+                }
+                blockIndex++;
             }
-            blockIndex++;
             if (blockIndex == currentRequest.getBlockCount()) {
                 completions.encolar(currentRequest.complete(cycle, selectedPolicy));
                 totalRequestsServed++;
@@ -218,7 +222,8 @@ public class DiskScheduler implements ComponenteReloj {
             return new DiskSnapshot(currentCycle, currentHead, currentDirection,
                     activePolicy.getPolicy(), speed, totalHeadMovement, totalRequestsServed,
                     currentRequest == null ? -1 : currentRequest.getId(),
-                    currentRequest == null ? -1 : currentRequest.blockAt(blockIndex), requestQueue.getTamano());
+                    currentRequest == null || currentRequest.getBlockCount() == 0
+                            ? -1 : currentRequest.blockAt(blockIndex), requestQueue.getTamano());
         } finally {
             mutex.release();
         }

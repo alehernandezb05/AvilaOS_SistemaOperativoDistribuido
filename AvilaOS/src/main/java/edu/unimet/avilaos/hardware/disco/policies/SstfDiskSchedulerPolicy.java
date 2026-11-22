@@ -21,7 +21,7 @@ public class SstfDiskSchedulerPolicy implements IDiskSchedulerPolicy {
 
         for (int i = 0; i < queue.getTamano(); i++) {
             DiskRequest req = queue.obtener(i);
-            int distance = Math.abs(req.getBlockNumber() - currentHead);
+            int distance = Math.abs(req.schedulingBlock(currentHead) - currentHead);
             if (distance < minDistance) {
                 minDistance = distance;
                 closest = req;

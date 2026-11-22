@@ -43,6 +43,17 @@ privado, el solicitante debe coincidir con su dueño.
 El ejemplo ejecuta cinco lecturas y registra tres errores de E/S. Los dos
 `UPDATE` requieren `newName` y `DELETE` está pendiente de implementación.
 
+Selecciona un directorio y pulsa **Crear archivo o directorio…** para encolar
+un proceso CREATE. El árbol, la tabla y el mapa muestran el cambio al terminar
+la E/S. Se registra el PCB creador y la entrada nace privada. En esta simulación
+`admin` puede crear en cualquier directorio. Los demás solicitantes solo
+pueden crear archivos en sus propios directorios.
+
+En el JSON, CREATE requiere `requester` para autorizar la ejecución y
+`fileSizeBlocks` para elegir qué crear. Un tamaño positivo indica un archivo
+y 0 indica un directorio. El directorio usa un ciclo de metadatos en el disco
+y no ocupa bloques.
+
 ## Verificacion
 
 Desde la carpeta `AvilaOS`, con Java 25 y Maven disponibles:

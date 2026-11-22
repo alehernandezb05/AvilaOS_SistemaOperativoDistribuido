@@ -74,7 +74,7 @@ final class PruebaSistemaArchivos {
             } catch (IllegalArgumentException esperado) {
                 comprobar(esperado.getMessage().contains("swap"), "La incompatibilidad de swap debe explicarse.");
             }
-            comprobar(simulador.getSistemaArchivos() == oficial && simulador.getDisco().getCurrentHead() == 50,
+            comprobar(simulador.getSistemaArchivos().vista() == oficial.vista() && simulador.getDisco().getCurrentHead() == 50,
                     "Un candidato inválido no modifica la simulación anterior.");
             System.out.println("OK: rutas, datos y bloques inválidos se rechazan antes de publicar la carga.");
         } finally {

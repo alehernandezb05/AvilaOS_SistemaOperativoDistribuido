@@ -128,24 +128,18 @@ public class NucleoSO implements ComponenteReloj {
         PCB proceso = cpu.getProcesoActual();
         if (proceso == null || !proceso.debeEnviarSolicitudDisco()) return;
         OperacionArchivo operacion = proceso.getOperacionArchivo();
-        DiskRequest solicitud;
+        DiskRequest solicitud = null;
         try {
-            if (operacion.tipo() == DiskOperation.UPDATE && operacion.nuevoNombre() == null) {
-                throw new IllegalArgumentException("UPDATE requiere newName.");
+            solicitud = prepararSolicitudDisco(proceso, operacion);
+            if (!disco.addRequest(solicitud)) {
+                finalizarCreacion(solicitud, false);
+                return;
             }
-            if (operacion.tipo() != DiskOperation.READ) {
-                throw new IllegalArgumentException(operacion.tipo() + " todavía no está disponible.");
-            }
-            if (archivos == null) throw new IllegalArgumentException("Falta cargar el sistema de archivos.");
-            var archivo = archivos.archivoParaLectura(operacion.ruta(), operacion.solicitante());
-            int[] bloques = disco.getStorage().getFileChain(archivo.ruta(), archivo.primerBloque());
-            solicitud = new DiskRequest(proceso.getId(), proceso.getNombre(), operacion.tipo(), bloques);
-            if (!disco.addRequest(solicitud)) return;
         } catch (IllegalArgumentException e) {
+            if (solicitud != null) finalizarCreacion(solicitud, false);
             cpu.liberar();
             ciclosEnCpu = 0;
-            finalizar(proceso, MotivoTerminacion.ERROR_ES, cicloActual);
-            registrar("rechaza " + operacion.tipo() + " " + operacion.ruta() + " de " + proceso + ". " + e.getMessage());
+            rechazarOperacionArchivo(proceso, e.getMessage());
             return;
         }
         proceso.registrarSolicitudDisco(solicitud);
@@ -156,23 +150,68 @@ public class NucleoSO implements ComponenteReloj {
                 + " de " + proceso + " (ejecución -> bloqueado)");
     }
 
+    private DiskRequest prepararSolicitudDisco(PCB proceso, OperacionArchivo operacion) {
+        if (archivos == null) throw new IllegalArgumentException("Falta cargar el sistema de archivos.");
+        return switch (operacion.tipo()) {
+            case READ -> {
+                var archivo = archivos.archivoParaLectura(operacion.ruta(), operacion.solicitante());
+                int[] bloques = disco.getStorage().getFileChain(archivo.ruta(), archivo.primerBloque());
+                yield new DiskRequest(proceso.getId(), proceso.getNombre(), operacion.tipo(), bloques);
+            }
+            case CREATE -> archivos.prepararCreacion(operacion, proceso.getId(), proceso.getNombre(), disco.getStorage());
+            case UPDATE -> throw new IllegalArgumentException(operacion.nuevoNombre() == null
+                    ? "UPDATE requiere newName." : "UPDATE todavía no está disponible.");
+            default -> throw new IllegalArgumentException(operacion.tipo() + " todavía no está disponible.");
+        };
+    }
+
+    private void finalizarCreacion(DiskRequest solicitud, boolean confirmar) {
+        if (solicitud.getOperation() == DiskOperation.CREATE) {
+            archivos.finalizarCreacion(solicitud.getId(), confirmar, disco.getStorage());
+        }
+    }
+
+    private void rechazarOperacionArchivo(PCB proceso, String motivo) {
+        finalizar(proceso, MotivoTerminacion.ERROR_ES, cicloActual);
+        OperacionArchivo operacion = proceso.getOperacionArchivo();
+        registrar("rechaza " + operacion.tipo() + " " + operacion.ruta() + " de " + proceso + ". " + motivo);
+    }
+
     /** Publica los despertares después de planificar para que pasen por Listo. */
     private void recibirFinalizacionesDisco() {
         DiskCompletion resultado;
         while ((resultado = disco.pollCompleted()) != null) {
-            for (int i = 0; i < colas.cantidadBloqueados(); i++) {
-                PCB proceso = colas.obtenerBloqueado(i);
-                if (proceso == null || proceso.getMotivoBloqueo() != MotivoBloqueo.ESPERA_DISCO) continue;
-                DiskRequest pendiente = proceso.getSolicitudDisco();
-                if (proceso.getId() == resultado.processId() && pendiente != null
-                        && pendiente.getId() == resultado.requestId() && colas.quitarBloqueado(proceso)) {
-                    colas.agregarListo(proceso);
-                    registrar("termina la solicitud " + resultado.requestId() + " " + resultado.operation()
-                            + " de " + proceso + " (bloqueado -> listo)");
-                    break;
+            PCB proceso = buscarBloqueado(resultado);
+            if (proceso == null || !colas.quitarBloqueado(proceso)) {
+                // Un CREATE vencido conserva su reserva hasta que el disco deja de usarla.
+                if (archivos != null && resultado.operation() == DiskOperation.CREATE) {
+                    archivos.finalizarCreacion(resultado.requestId(), false, disco.getStorage());
                 }
+                continue;
             }
+            DiskRequest solicitud = proceso.getSolicitudDisco();
+            try {
+                finalizarCreacion(solicitud, true);
+            } catch (IllegalArgumentException e) {
+                finalizarCreacion(solicitud, false);
+                rechazarOperacionArchivo(proceso, e.getMessage());
+                continue;
+            }
+            colas.agregarListo(proceso);
+            registrar("termina la solicitud " + resultado.requestId() + " " + resultado.operation()
+                    + " " + proceso.getOperacionArchivo().ruta() + " de " + proceso + " (bloqueado -> listo)");
         }
+    }
+
+    private PCB buscarBloqueado(DiskCompletion resultado) {
+        for (int i = 0; i < colas.cantidadBloqueados(); i++) {
+            PCB proceso = colas.obtenerBloqueado(i);
+            if (proceso == null || proceso.getMotivoBloqueo() != MotivoBloqueo.ESPERA_DISCO) continue;
+            DiskRequest pendiente = proceso.getSolicitudDisco();
+            if (proceso.getId() == resultado.processId() && pendiente != null
+                    && pendiente.getId() == resultado.requestId()) return proceso;
+        }
+        return null;
     }
 
     private void avanzarBloqueados() {

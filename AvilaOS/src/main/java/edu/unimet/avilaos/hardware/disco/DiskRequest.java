@@ -22,10 +22,20 @@ public final class DiskRequest {
     }
 
     public DiskRequest(int processId, String processName, DiskOperation operation, int[] blockNumbers) {
+        this(processId, processName, operation, blockNumbers, false);
+    }
+
+    /** Trabajo de metadatos en el cabezal; ocupa un ciclo de servicio. */
+    public static DiskRequest metadata(int processId, String processName, DiskOperation operation) {
+        return new DiskRequest(processId, processName, operation, new int[0], true);
+    }
+
+    private DiskRequest(int processId, String processName, DiskOperation operation, int[] blockNumbers,
+                        boolean metadata) {
         if (processId < 1 || processName == null || processName.isBlank() || operation == null) {
             throw new IllegalArgumentException("La solicitud necesita ID de proceso, nombre y operacion.");
         }
-        if (blockNumbers == null || blockNumbers.length == 0) {
+        if (blockNumbers == null || (blockNumbers.length == 0 && !metadata)) {
             throw new IllegalArgumentException("La solicitud necesita al menos un bloque.");
         }
         this.blockNumbers = blockNumbers.clone();
@@ -70,7 +80,8 @@ public final class DiskRequest {
     public int getProcessId() { return processId; }
     public String getProcessName() { return processName; }
     public DiskOperation getOperation() { return operation; }
-    public int getBlockNumber() { return blockNumbers[0]; }
+    public int getBlockNumber() { return blockNumbers.length == 0 ? DiskBlock.END_OF_CHAIN : blockNumbers[0]; }
+    public int schedulingBlock(int head) { return blockNumbers.length == 0 ? head : blockNumbers[0]; }
     public int getBlockCount() { return blockNumbers.length; }
     public int[] getBlockNumbers() { return blockNumbers.clone(); }
     public DiskRequestStatus getStatus() { return progress.status(); }

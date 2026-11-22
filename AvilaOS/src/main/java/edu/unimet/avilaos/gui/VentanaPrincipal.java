@@ -6,6 +6,8 @@ import edu.unimet.avilaos.config.ArchivoSistemaArchivos;
 import edu.unimet.avilaos.config.Configuracion;
 import edu.unimet.avilaos.config.ConfiguracionInvalidaException;
 import edu.unimet.avilaos.so.PCB;
+import edu.unimet.avilaos.so.TipoProceso;
+import edu.unimet.avilaos.so.archivos.OperacionArchivo;
 import edu.unimet.avilaos.so.archivos.SistemaArchivos;
 import java.awt.BorderLayout;
 import java.awt.Dimension;
@@ -77,8 +79,8 @@ public class VentanaPrincipal extends JFrame {
 
         JScrollPane scrollComputadores = new JScrollPane(panelComputador);
         scrollComputadores.getVerticalScrollBar().setUnitIncrement(16);
-        panelArchivos = new PanelSistemaArchivos(simulador.getSistemaArchivos(), rutaSeleccionada,
-                this::cargarSistemaArchivos, this::abrirDialogoCrearLectura);
+        panelArchivos = new PanelSistemaArchivos(simulador.getSistemaArchivos(), simulador.getDisco(), rutaSeleccionada,
+                this::cargarSistemaArchivos, this::abrirDialogoCrearLectura, this::abrirDialogoCrearEntrada);
         JTabbedPane vistas = new JTabbedPane();
         vistas.addTab("Computador", scrollComputadores);
         vistas.addTab("Sistema de archivos", panelArchivos);
@@ -209,6 +211,7 @@ public class VentanaPrincipal extends JFrame {
         panelGrafico.actualizar();
         panelLog.actualizar(simulador.getLog());
         panelMetricas.actualizar();
+        panelArchivos.actualizar();
     }
 
     /** Abre el dialogo de crear proceso y lo envia al simulador. */
@@ -222,6 +225,15 @@ public class VentanaPrincipal extends JFrame {
         PCB proceso = dialogo.getProcesoCreado();
         if (proceso != null) {
             simulador.agregarProceso(proceso);
+        }
+    }
+
+    private void abrirDialogoCrearEntrada(String directorio) {
+        OperacionArchivo operacion = DialogoCrearEntrada.solicitar(this, directorio,
+                simulador.getDisco().getTotalBlocks());
+        if (operacion != null) {
+            simulador.agregarProceso(new PCB("Crear " + operacion.ruta(), 1, TipoProceso.IO_BOUND, 1, 1, 1,
+                    DialogoCrearProceso.MAX_DEADLINE, simulador.getCicloActual(), operacion));
         }
     }
 }

@@ -100,13 +100,13 @@ public class Simulador implements ServicioCluster {
         }
         this.quantum = quantum;
         this.latenciaRed = latenciaRed;
-        this.sistemaArchivos = sistemaArchivos;
+        this.sistemaArchivos = sistemaArchivos == null ? null : sistemaArchivos.copia();
         this.procesosCargados = procesosCargados;
         this.reloj = new Reloj(duracionCicloMs);
         this.computadores = new Computador[tamanosRam.length];
         int bloques = sistemaArchivos == null ? configDisco.getTotalBlocks() : sistemaArchivos.bloquesDisco();
         int cabezal = sistemaArchivos == null ? configDisco.getInitialHead() : sistemaArchivos.cabezalInicial();
-        InitialFile[] archivos = sistemaArchivos == null ? new InitialFile[0] : sistemaArchivos.archivosIniciales();
+        InitialFile[] archivos = this.sistemaArchivos == null ? new InitialFile[0] : this.sistemaArchivos.archivosIniciales();
         // El JSON de procesos aporta swap y velocidad; la vista previa solo usa la geometría cargada.
         boolean vistaPreviaArchivos = sistemaArchivos != null && !procesosCargados;
         DiskScheduler disco = new DiskScheduler(bloques, cabezal, vistaPreviaArchivos ? 0 : configDisco.getSwapSizeBlocks(),
@@ -114,7 +114,7 @@ public class Simulador implements ServicioCluster {
         // Los IDs de los computadores empiezan en 1; todos comparten el mismo log global
         for (int i = 0; i < tamanosRam.length; i++) {
             computadores[i] = new Computador(i + 1, tamanosRam[i], crearEstrategia(politicas[i], quantum), reloj,
-                    disco, sistemaArchivos);
+                    disco, this.sistemaArchivos);
             computadores[i].setLog(log);
             computadores[i].setServicio(this);
         }
