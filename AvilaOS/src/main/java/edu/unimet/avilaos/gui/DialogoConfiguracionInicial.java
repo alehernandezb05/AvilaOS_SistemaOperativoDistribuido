@@ -2,6 +2,7 @@ package edu.unimet.avilaos.gui;
 
 import edu.unimet.avilaos.config.ArchivoConfiguracion;
 import edu.unimet.avilaos.config.ConfigProceso;
+import edu.unimet.avilaos.config.ConfigDisco;
 import edu.unimet.avilaos.config.Configuracion;
 import edu.unimet.avilaos.config.Configuracion.ConfigComputador;
 import edu.unimet.avilaos.config.ConfiguracionInvalidaException;
@@ -32,6 +33,7 @@ public class DialogoConfiguracionInicial extends JDialog {
     private final JLabel lblProcesos = new JLabel();
     private ConfigProceso[] procesosCargados = new ConfigProceso[0];
     private Configuracion resultado;
+    private ConfigDisco discoCargado;
 
     public DialogoConfiguracionInicial(Configuracion inicial) {
         super((java.awt.Frame) null, "AvilaOS - Configuracion del computador", true);
@@ -86,6 +88,7 @@ public class DialogoConfiguracionInicial extends JDialog {
         spnRam.setValue(config.getComputador(0).getRam());
         comboPolitica.setSelectedItem(config.getComputador(0).getPolitica());
         procesosCargados = config.getProcesos();
+        discoCargado = config.getDisco();
         lblProcesos.setText("Carga inicial: " + procesosCargados.length + " procesos");
     }
 
@@ -119,6 +122,7 @@ public class DialogoConfiguracionInicial extends JDialog {
                     new ConfigComputador((Integer) spnRam.getValue(),
                             (PoliticaPlanificacion) comboPolitica.getSelectedItem())
                 }, new Configuracion.ConfigBuffer[0], procesosCargados);
+        config.setDisco(discoCargado);
         try {
             config.validar();
             resultado = config;

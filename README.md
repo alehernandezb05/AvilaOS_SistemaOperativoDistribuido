@@ -20,7 +20,9 @@ computador con CPU, RAM, planificacion y metricas del Proyecto 1.
 
 La carga obligatoria de los dos JSON del Proyecto 2 y la conexion de E/S al
 disco se incorporan en las tareas de sistema de archivos e integracion. Este
-primer cambio conserva la E/S temporal del Proyecto 1.
+cambio conserva la E/S temporal de los procesos del Proyecto 1; el disco ya
+comparte su reloj, pero la conexion de los PCBs a las solicitudes corresponde
+a la integracion de E/S.
 
 ## Verificacion
 
@@ -46,3 +48,51 @@ sin un framework adicional; usar `verificar.sh` para ejecutarlas.
 
 Se mantienen Gson 2.11.0 para JSON y JFreeChart 1.5.5 para graficas. Las
 estructuras del simulador son propias; Swing, hilos y semaforos son del JDK.
+
+## Disco y reloj global
+
+El computador registra el disco antes del nucleo y de la CPU en el mismo
+reloj. El disco atiende una sola solicitud a la vez; el movimiento consume
+ciclos segun su velocidad y cada bloque ocupa otro ciclo de transferencia.
+FIFO conserva el orden de llegada y SSTF elige el bloque mas cercano; ante
+un empate conserva el orden de llegada. Cambiar politica afecta la siguiente
+seleccion, sin interrumpir la solicitud activa.
+
+`DiskRequest` identifica proceso, operacion y bloques. Se envia una sola vez
+con `addRequest`; `pollCompleted` entrega cada resultado una vez, fuera del
+semaforo del motor. El resultado tambien queda consultable en la solicitud.
+Las estrategias implementan `IDiskSchedulerPolicy` y se pueden inyectar en el
+constructor o con `setPolicy`, sin editar el motor.
+
+Los JSON existentes funcionan sin el campo opcional `disco`. Para configurar
+sus parametros iniciales se puede agregar este objeto a la configuracion:
+
+```json
+"disco": {
+  "totalBlocks": 200,
+  "initialHead": 50,
+  "swapSizeBlocks": 100,
+  "headSpeed": 1,
+  "initialPolicy": "FIFO"
+}
+```
+
+El disco admite entre 1 y 500 bloques; el cabezal usa indices desde cero y
+la velocidad se expresa en posiciones por ciclo (1 hasta el total de bloques).
+`swapSizeBlocks` conserva el parametro de la reserva futura; la asignacion
+de bloques y el swap se implementan en sus propias tareas. Guardar esta
+configuracion conserva el cabezal inicial, sin guardar el estado de una
+simulacion en curso.
+
+Para probar solo el disco: `./verificar.sh disco`. Para abrir la ventana de
+prueba, ejecutar la clase `edu.unimet.avilaos.gui.TestDiskGUI` en NetBeans, o:
+
+```sh
+mvn compile exec:java -Dexec.mainClass=edu.unimet.avilaos.gui.TestDiskGUI
+```
+
+La ventana incluye ocho solicitudes de prueba, politica FIFO/SSTF, velocidad
+y pausa/reanudacion. Su Timer de Swing solo refresca la vista; el reloj del
+simulador realiza el trabajo. Las solicitudes de esta ventana identifican
+procesos de prueba, sin crear PCBs ni ejecutar CRUD. La vista principal del
+disco, SCAN, C-SCAN, archivos y suspension se completan en los issues #77–#93.
