@@ -81,6 +81,12 @@ public class PanelDisco extends JPanel {
     }
 
     /** Avisa cuando el usuario elige otra politica de disco. */
+    /** Solo el administrador cambia la politica y la velocidad del disco. */
+    void setControlesEditables(boolean editables) {
+        comboPolitica.setEnabled(editables);
+        spnVelocidad.setEnabled(editables);
+    }
+
     void alCambiarPolitica(Consumer<DiskPolicy> accion) {
         comboPolitica.addActionListener(e -> {
             if (!sincronizando) accion.accept((DiskPolicy) comboPolitica.getSelectedItem());

@@ -54,6 +54,11 @@ public class PanelComputador extends JPanel {
         actualizar();
     }
 
+    /** Solo el administrador cambia la politica de CPU. */
+    public void setPoliticaEditable(boolean editable) {
+        comboPolitica.setEnabled(editable);
+    }
+
     /** Avisa cuando el usuario elige otra politica para este computador. */
     public void alCambiarPolitica(Consumer<PoliticaPlanificacion> accion) {
         comboPolitica.addActionListener(e -> {

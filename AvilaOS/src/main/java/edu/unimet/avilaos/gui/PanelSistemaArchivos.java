@@ -41,6 +41,8 @@ final class PanelSistemaArchivos extends JPanel {
     private final JButton crear = new JButton("Crear archivo o directorio…");
     private final JButton renombrar = new JButton("Renombrar…");
     private final JButton eliminar = new JButton("Eliminar…");
+    private final JButton boton = new JButton("Cargar sistema de archivos…");
+    private boolean administrador = true;
     private String renombreDesde;
     private String renombreHasta;
 
@@ -51,7 +53,6 @@ final class PanelSistemaArchivos extends JPanel {
         this.sistema = sistema;
         this.disco = disco;
         vista = sistema == null ? null : sistema.vista();
-        JButton boton = new JButton("Cargar sistema de archivos…");
         boton.addActionListener(e -> cargar.run());
         JPanel controles = new JPanel(new FlowLayout(FlowLayout.LEFT));
         controles.add(boton);
@@ -150,13 +151,22 @@ final class PanelSistemaArchivos extends JPanel {
         return arbol.getLastSelectedPathComponent() instanceof Nodo nodo ? nodo.entrada().ruta() : null;
     }
 
+    /** Renombrar y cargar otro sistema de archivos son solo del administrador. */
+    void setAdministrador(boolean administrador) {
+        this.administrador = administrador;
+        boton.setEnabled(administrador);
+        mostrarDetalle();
+    }
+
     private void mostrarDetalle() {
         if (arbol.getLastSelectedPathComponent() instanceof Nodo nodo) {
             Entrada entrada = nodo.entrada();
             leer.setEnabled(entrada.tipo() == SistemaArchivos.Tipo.FILE);
             crear.setEnabled(entrada.tipo() == SistemaArchivos.Tipo.DIRECTORY);
-            renombrar.setEnabled(!entrada.ruta().equals("/"));
-            eliminar.setEnabled(!entrada.ruta().equals("/"));
+            // En modo usuario los demas botones siguen activos: el simulador explica cada rechazo
+            renombrar.setEnabled(administrador && !entrada.ruta().equals("/"));
+            eliminar.setEnabled(!entrada.ruta().equals("/")
+                    && (administrador || entrada.tipo() == SistemaArchivos.Tipo.FILE));
             detalle.setText(entrada.nombre() + "  |  Bloques: " + entrada.bloques()
                     + "  |  Dueño: " + entrada.duenio() + "  |  Permiso: "
                     + (entrada.permiso() == SistemaArchivos.Permiso.PUBLIC ? "Público" : "Privado")
