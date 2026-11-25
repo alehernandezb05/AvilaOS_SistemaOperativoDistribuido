@@ -164,11 +164,14 @@ public final class SistemaArchivos {
     }
 
     private record Creacion(long solicitud, Entrada entrada, FileReservation reserva) { }
+    /** UPDATE o DELETE confirmado solo cuando el disco termina su solicitud. */
+    private record Cambio(long solicitud, DiskOperation tipo, String ruta, String destino) { }
     public record VistaDisco(Vista archivos, DiskBlock[] bloques) { }
 
     private final int bloquesDisco;
     private final int cabezalInicial;
     private final Lista<Creacion> pendientes = new Lista<>();
+    private final Lista<Cambio> cambios = new Lista<>();
     private volatile Vista vista;
 
     public SistemaArchivos(int bloquesDisco, int cabezalInicial, Entrada[] entradas) {
@@ -198,6 +201,13 @@ public final class SistemaArchivos {
                 throw new IllegalArgumentException("Ya hay una creación pendiente para " + ruta + ".");
             }
         }
+        for (int i = 0; i < cambios.getTamano(); i++) {
+            Cambio cambio = cambios.obtener(i);
+            if (contiene(cambio.ruta, ruta) || (cambio.destino != null && contiene(cambio.destino, ruta))) {
+                throw new IllegalArgumentException("No se puede crear " + ruta + ": hay un " + cambio.tipo
+                        + " pendiente sobre " + cambio.ruta + ".");
+            }
+        }
         String solicitante = operacion.solicitante();
         boolean directorio = operacion.bloques() == 0;
         validarPermisoCreacion(solicitante, directorio, padre.entrada);
@@ -222,6 +232,140 @@ public final class SistemaArchivos {
             throw new IllegalArgumentException(directorio ? "Crear directorios requiere administrador."
                     : "CREATE requiere administrador o ser dueño del directorio destino.");
         }
+    }
+
+    /** Renombrar es trabajo de metadatos: un ciclo de disco, sin mover los bloques del archivo. */
+    public synchronized DiskRequest prepararActualizacion(OperacionArchivo operacion, int procesoId, String proceso) {
+        if (operacion.tipo() != DiskOperation.UPDATE) throw new IllegalArgumentException("Se esperaba UPDATE.");
+        String nuevoNombre = operacion.nuevoNombre();
+        if (nuevoNombre == null) {
+            throw new IllegalArgumentException("UPDATE requiere newName: falta el nombre destino.");
+        }
+        String ruta = operacion.ruta();
+        if (ruta.equals("/")) throw new IllegalArgumentException("No se puede renombrar el directorio raíz.");
+        Nodo nodo = buscar(ruta);
+        if (nodo == null) throw new IllegalArgumentException("No existe " + ruta + ": fue eliminado o nunca existió.");
+        if (!ADMINISTRADOR.equals(operacion.solicitante())) {
+            throw new IllegalArgumentException("UPDATE denegado: renombrar requiere administrador.");
+        }
+        if (nuevoNombre.equals(nodo.entrada.nombre())) {
+            throw new IllegalArgumentException("El nombre destino es igual al actual: " + nuevoNombre + ".");
+        }
+        String destino = rutaHija(rutaPadre(ruta), nuevoNombre);
+        if (buscar(destino) != null) throw new IllegalArgumentException("Ya existe " + destino + ".");
+        validarSinConflicto(ruta, destino);
+        DiskRequest solicitud = DiskRequest.metadata(procesoId, proceso, DiskOperation.UPDATE);
+        cambios.agregar(new Cambio(solicitud.getId(), DiskOperation.UPDATE, ruta, destino));
+        return solicitud;
+    }
+
+    /** El disco recorre los bloques de cada archivo eliminado; sin bloques es trabajo de metadatos. */
+    public synchronized DiskRequest prepararEliminacion(OperacionArchivo operacion, int procesoId, String proceso) {
+        if (operacion.tipo() != DiskOperation.DELETE) throw new IllegalArgumentException("Se esperaba DELETE.");
+        String ruta = operacion.ruta();
+        if (ruta.equals("/")) throw new IllegalArgumentException("No se puede eliminar el directorio raíz.");
+        Nodo nodo = buscar(ruta);
+        if (nodo == null) throw new IllegalArgumentException("No existe " + ruta + ": fue eliminado o nunca existió.");
+        validarPermisoEliminacion(operacion.solicitante(), nodo.entrada);
+        validarSinConflicto(ruta, null);
+        int[] bloques = new int[contarBloques(nodo)];
+        copiarBloques(nodo, bloques, 0);
+        DiskRequest solicitud = bloques.length == 0 ? DiskRequest.metadata(procesoId, proceso, DiskOperation.DELETE)
+                : new DiskRequest(procesoId, proceso, DiskOperation.DELETE, bloques);
+        cambios.agregar(new Cambio(solicitud.getId(), DiskOperation.DELETE, ruta, null));
+        return solicitud;
+    }
+
+    private static void validarPermisoEliminacion(String solicitante, Entrada entrada) {
+        if (ADMINISTRADOR.equals(solicitante)) return;
+        if (solicitante != null && entrada.tipo() == Tipo.FILE && entrada.duenio().equals(solicitante)) return;
+        throw new IllegalArgumentException("DELETE denegado: " + entrada.ruta()
+                + " requiere administrador o ser dueño del archivo.");
+    }
+
+    private static int contarBloques(Nodo nodo) {
+        int total = nodo.entrada.bloques();
+        for (int i = 0; i < nodo.cantidadHijos(); i++) total += contarBloques(nodo.hijo(i));
+        return total;
+    }
+
+    private static int copiarBloques(Nodo nodo, int[] destino, int desde) {
+        int siguiente = desde;
+        for (int bloque : nodo.entrada.cadena()) destino[siguiente++] = bloque;
+        for (int i = 0; i < nodo.cantidadHijos(); i++) siguiente = copiarBloques(nodo.hijo(i), destino, siguiente);
+        return siguiente;
+    }
+
+    /** true si la ruta es el ancestro o es la misma entrada. */
+    private static boolean contiene(String ancestro, String ruta) {
+        return ruta.equals(ancestro) || ruta.startsWith(ancestro.equals("/") ? "/" : ancestro + "/");
+    }
+
+    /** Una entrada solo admite una operación de cambio a la vez, junto con sus ancestros y descendientes. */
+    private void validarSinConflicto(String ruta, String destino) {
+        for (int i = 0; i < cambios.getTamano(); i++) {
+            Cambio cambio = cambios.obtener(i);
+            if (contiene(cambio.ruta, ruta) || contiene(ruta, cambio.ruta)
+                    || (cambio.destino != null && (contiene(cambio.destino, ruta) || contiene(ruta, cambio.destino)
+                        || cambio.destino.equals(destino)))) {
+                throw new IllegalArgumentException("Hay un " + cambio.tipo + " pendiente sobre " + cambio.ruta + ".");
+            }
+        }
+        for (int i = 0; i < pendientes.getTamano(); i++) {
+            String creada = pendientes.obtener(i).entrada.ruta();
+            if (contiene(ruta, creada) || creada.equals(destino)) {
+                throw new IllegalArgumentException("Hay una creación pendiente para " + creada + ".");
+            }
+        }
+    }
+
+    /**
+     * Confirma o cancela una operación pendiente (CREATE, UPDATE o DELETE) cuando el disco termina su solicitud
+     * o cuando el proceso muere antes. Cancelar siempre libera la reserva sin publicar nada.
+     */
+    public synchronized void finalizarOperacion(long solicitudId, boolean confirmar, DiskStorage disco) {
+        for (int i = 0; i < cambios.getTamano(); i++) {
+            Cambio cambio = cambios.obtener(i);
+            if (cambio.solicitud != solicitudId) continue;
+            cambios.remover(cambio);
+            if (confirmar) aplicar(cambio, disco);
+            return;
+        }
+        finalizarCreacion(solicitudId, confirmar, disco);
+    }
+
+    private void aplicar(Cambio cambio, DiskStorage disco) {
+        if (buscar(cambio.ruta) == null) {
+            throw new IllegalArgumentException("No existe " + cambio.ruta + ": fue eliminado antes de terminar.");
+        }
+        if (cambio.tipo == DiskOperation.UPDATE) {
+            if (buscar(cambio.destino) != null) throw new IllegalArgumentException("Ya existe " + cambio.destino + ".");
+            Entrada[] entradas = new Entrada[vista.entradas.length];
+            for (int i = 0; i < entradas.length; i++) {
+                Entrada e = vista.entradas[i];
+                if (contiene(cambio.ruta, e.ruta())) {
+                    e = new Entrada(cambio.destino + e.ruta().substring(cambio.ruta.length()), e.tipo(), e.duenio(),
+                            e.permiso(), e.cadena(), e.procesoCreador());
+                }
+                entradas[i] = e;
+            }
+            Vista siguiente = new Vista(bloquesDisco, entradas);
+            disco.renamePath(cambio.ruta, cambio.destino);
+            vista = siguiente;
+            return;
+        }
+        int restantes = 0;
+        for (Entrada e : vista.entradas) if (!contiene(cambio.ruta, e.ruta())) restantes++;
+        Entrada[] entradas = new Entrada[restantes];
+        int siguienteEntrada = 0;
+        for (Entrada e : vista.entradas) {
+            if (!contiene(cambio.ruta, e.ruta())) entradas[siguienteEntrada++] = e;
+        }
+        Vista siguiente = new Vista(bloquesDisco, entradas);
+        for (Entrada e : vista.entradas) {
+            if (e.tipo() == Tipo.FILE && contiene(cambio.ruta, e.ruta())) disco.releaseFile(e.ruta(), e.primerBloque());
+        }
+        vista = siguiente;
     }
 
     public synchronized void finalizarCreacion(long solicitudId, boolean confirmar, DiskStorage disco) {
