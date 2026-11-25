@@ -38,6 +38,7 @@ public class VentanaPrincipal extends JFrame {
     private final PanelMetricas panelMetricas;
     private final PanelComputador panelComputador;
     private final PanelSistemaArchivos panelArchivos;
+    private final PanelDisco panelDisco;
     private final Timer refresco;
     private final BiConsumer<Simulador, String> alReiniciar;
 
@@ -82,8 +83,26 @@ public class VentanaPrincipal extends JFrame {
         panelArchivos = new PanelSistemaArchivos(simulador.getSistemaArchivos(), simulador.getDisco(), rutaSeleccionada,
                 this::cargarSistemaArchivos, this::abrirDialogoCrearLectura, this::abrirDialogoCrearEntrada,
                 this::abrirDialogoRenombrar, this::abrirDialogoEliminar);
+        panelDisco = new PanelDisco(simulador.getDisco());
+        panelDisco.alCambiarPolitica(p -> {
+            try {
+                simulador.cambiarPoliticaDisco(p);
+            } catch (IllegalArgumentException e) {
+                error(e.getMessage());
+            }
+            panelDisco.actualizar();
+        });
+        panelDisco.alCambiarVelocidad(v -> {
+            try {
+                simulador.setVelocidadDisco(v);
+            } catch (IllegalArgumentException e) {
+                error(e.getMessage());
+            }
+            panelDisco.actualizar();
+        });
         JTabbedPane vistas = new JTabbedPane();
         vistas.addTab("Computador", scrollComputadores);
+        vistas.addTab("Disco", panelDisco);
         vistas.addTab("Sistema de archivos", panelArchivos);
         if (simulador.impedimentoInicio() != null || rutaSeleccionada != null) vistas.setSelectedComponent(panelArchivos);
         JSplitPane principal = new JSplitPane(JSplitPane.VERTICAL_SPLIT, vistas, inferior);
@@ -213,6 +232,7 @@ public class VentanaPrincipal extends JFrame {
         panelLog.actualizar(simulador.getLog());
         panelMetricas.actualizar();
         panelArchivos.actualizar();
+        panelDisco.actualizar();
     }
 
     /** Abre el dialogo de crear proceso y lo envia al simulador. */
