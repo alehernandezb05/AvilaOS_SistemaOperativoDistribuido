@@ -68,6 +68,7 @@ public final class PruebaDisco {
         PruebaRead.ejecutar();
         PruebaCreate.ejecutar();
         PruebaActualizarEliminar.ejecutar();
+        PruebaSuspension.ejecutar();
     }
 
     private static void transferencia() {

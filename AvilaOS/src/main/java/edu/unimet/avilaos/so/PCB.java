@@ -24,6 +24,11 @@ public class PCB {
     private final OperacionArchivo operacionArchivo;
     private boolean instruccionArchivoEjecutada;
     private DiskRequest solicitudDisco;
+    private DiskRequest solicitudSwap;
+    private boolean enSwap;
+    private boolean eventoDuranteSuspension;
+    private int ciclosBloqueoActual;
+    private String avisoAdmision;
 
     private EstadoProceso estado;
     private MotivoBloqueo motivoBloqueo;
@@ -128,6 +133,33 @@ public class PCB {
     boolean debeEnviarSolicitudDisco() { return instruccionArchivoEjecutada && solicitudDisco == null; }
     void registrarSolicitudDisco(DiskRequest solicitud) { solicitudDisco = solicitud; }
     DiskRequest getSolicitudDisco() { return solicitudDisco; }
+
+    // Intercambio: la escritura al swap esta en curso mientras solicitudSwap no es null.
+    // La RAM se libera solo cuando esa escritura termina (enSwap pasa a true).
+    void iniciarSuspension(DiskRequest escritura) {
+        solicitudSwap = escritura;
+        eventoDuranteSuspension = false;
+    }
+
+    void completarSuspension() {
+        solicitudSwap = null;
+        enSwap = true;
+    }
+
+    /** El evento que esperaba ocurrio mientras se escribia al swap: termina en Listo/Suspendido. */
+    void registrarEventoDuranteSuspension() { eventoDuranteSuspension = true; }
+
+    boolean suspensionEnCurso() { return solicitudSwap != null; }
+    DiskRequest getSolicitudSwap() { return solicitudSwap; }
+    boolean isEventoDuranteSuspension() { return eventoDuranteSuspension; }
+    public boolean isEnSwap() { return enSwap; }
+
+    String getAvisoAdmision() { return avisoAdmision; }
+    void setAvisoAdmision(String aviso) { avisoAdmision = aviso; }
+
+    void iniciarBloqueo() { ciclosBloqueoActual = 0; }
+    /** Ciclos seguidos en el bloqueo actual; criterio para elegir la victima de suspension. */
+    public int getCiclosBloqueoActual() { return ciclosBloqueoActual; }
 
     public void decrementarDeadline() {
         if (deadline > 0) {
@@ -250,6 +282,7 @@ public class PCB {
 
     public void sumarCicloBloqueado() {
         ciclosBloqueado++;
+        ciclosBloqueoActual++;
     }
 
     public void sumarCicloBloqueadoSemaforo() {

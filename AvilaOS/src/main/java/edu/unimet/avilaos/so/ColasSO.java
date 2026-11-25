@@ -8,6 +8,8 @@ public class ColasSO {
     private final Cola<PCB> nuevos = new Cola<>();
     private final Cola<PCB> listos = new Cola<>();
     private final Cola<PCB> bloqueados = new Cola<>();
+    private final Cola<PCB> listosSuspendidos = new Cola<>();
+    private final Cola<PCB> bloqueadosSuspendidos = new Cola<>();
     private final Cola<PCB> terminados = new Cola<>();
     private final Semaphore mutex = new Semaphore(1);
 
@@ -37,7 +39,48 @@ public class ColasSO {
         try {
             p.setEstado(EstadoProceso.BLOQUEADO);
             p.setMotivoBloqueo(motivo);
+            p.iniciarBloqueo();
             bloqueados.encolar(p);
+        } finally {
+            mutex.release();
+        }
+    }
+
+    /** Conserva el motivo de bloqueo: el proceso sigue esperando su evento, ahora en swap. */
+    public void agregarBloqueadoSuspendido(PCB p) {
+        mutex.acquireUninterruptibly();
+        try {
+            p.setEstado(EstadoProceso.BLOQUEADO_SUSPENDIDO);
+            bloqueadosSuspendidos.encolar(p);
+        } finally {
+            mutex.release();
+        }
+    }
+
+    public void agregarListoSuspendido(PCB p) {
+        mutex.acquireUninterruptibly();
+        try {
+            p.setEstado(EstadoProceso.LISTO_SUSPENDIDO);
+            p.setMotivoBloqueo(null);
+            listosSuspendidos.encolar(p);
+        } finally {
+            mutex.release();
+        }
+    }
+
+    public boolean quitarBloqueadoSuspendido(PCB p) {
+        mutex.acquireUninterruptibly();
+        try {
+            return bloqueadosSuspendidos.remover(p);
+        } finally {
+            mutex.release();
+        }
+    }
+
+    public boolean quitarListoSuspendido(PCB p) {
+        mutex.acquireUninterruptibly();
+        try {
+            return listosSuspendidos.remover(p);
         } finally {
             mutex.release();
         }
@@ -85,6 +128,8 @@ public class ColasSO {
     public PCB obtenerListo(int indice) { return obtener(listos, indice); }
     public PCB obtenerBloqueado(int indice) { return obtener(bloqueados, indice); }
     public PCB obtenerTerminado(int indice) { return obtener(terminados, indice); }
+    public PCB obtenerListoSuspendido(int indice) { return obtener(listosSuspendidos, indice); }
+    public PCB obtenerBloqueadoSuspendido(int indice) { return obtener(bloqueadosSuspendidos, indice); }
 
     private PCB obtener(Cola<PCB> cola, int indice) {
         mutex.acquireUninterruptibly();
@@ -117,6 +162,8 @@ public class ColasSO {
     public int cantidadListos() { return tamano(listos); }
     public int cantidadBloqueados() { return tamano(bloqueados); }
     public int cantidadTerminados() { return tamano(terminados); }
+    public int cantidadListosSuspendidos() { return tamano(listosSuspendidos); }
+    public int cantidadBloqueadosSuspendidos() { return tamano(bloqueadosSuspendidos); }
 
     private int tamano(Cola<PCB> cola) {
         mutex.acquireUninterruptibly();
@@ -130,12 +177,14 @@ public class ColasSO {
     public PCB[] copiaDeTodos() {
         mutex.acquireUninterruptibly();
         try {
-            int total = nuevos.getTamano() + listos.getTamano()
-                    + bloqueados.getTamano() + terminados.getTamano();
+            int total = nuevos.getTamano() + listos.getTamano() + bloqueados.getTamano()
+                    + listosSuspendidos.getTamano() + bloqueadosSuspendidos.getTamano() + terminados.getTamano();
             PCB[] copia = new PCB[total];
             int k = copiar(nuevos, copia, 0);
             k = copiar(listos, copia, k);
             k = copiar(bloqueados, copia, k);
+            k = copiar(listosSuspendidos, copia, k);
+            k = copiar(bloqueadosSuspendidos, copia, k);
             copiar(terminados, copia, k);
             return copia;
         } finally {

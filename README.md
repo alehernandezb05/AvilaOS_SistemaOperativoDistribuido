@@ -96,6 +96,25 @@ sin un framework adicional; usar `verificar.sh` para ejecutarlas.
 Se mantienen Gson 2.11.0 para JSON y JFreeChart 1.5.5 para graficas. Las
 estructuras del simulador son propias; Swing, hilos y semaforos son del JDK.
 
+## Suspension y planificador a mediano plazo
+
+Los procesos usan siete estados: Nuevo, Listo, Ejecucion, Bloqueado,
+Listo/Suspendido, Bloqueado/Suspendido y Terminado. Cuando un Nuevo no cabe en
+la RAM, el nucleo suspende Bloqueados hasta cubrir la memoria que piden los
+Nuevos en espera, contando la que ya se esta escribiendo al swap.
+
+- **Victima:** el Bloqueado (por E/S o por disco) que mas ciclos lleva en su
+  bloqueo actual; en empate, el de menor ID.
+- **Escritura:** se reservan tantos bloques de swap como unidades de RAM tiene
+  el proceso y se encola una solicitud SUSPEND en la misma cola del disco. El
+  sistema operativo la emite directamente, sin dar CPU al proceso. La RAM se
+  libera una sola vez, cuando la escritura termina.
+- **Destino:** si el evento que esperaba ocurre durante la escritura, al
+  terminarla queda Listo/Suspendido; si no, Bloqueado/Suspendido, y pasa a
+  Listo/Suspendido cuando ocurra el evento.
+- **Sin victima o sin swap:** el Nuevo sigue esperando y el registro lo explica
+  una vez, sin reservar nada.
+
 ## Disco y reloj global
 
 El computador registra el disco antes del nucleo y de la CPU en el mismo
