@@ -114,6 +114,16 @@ Nuevos en espera, contando la que ya se esta escribiendo al swap.
   Listo/Suspendido cuando ocurra el evento.
 - **Sin victima o sin swap:** el Nuevo sigue esperando y el registro lo explica
   una vez, sin reservar nada.
+- **Reactivacion:** cada ciclo se revisa la cola Listo/Suspendido en orden de
+  llegada. Si hay RAM, se reserva antes de empezar y se encola una lectura
+  REACTIVATE de sus bloques de swap en la misma cola del disco. El proceso sigue
+  Listo/Suspendido hasta que la lectura termina; entonces libera el swap y pasa a
+  Listo con su PC, instrucciones, prioridad y deadline intactos. Un
+  Bloqueado/Suspendido no se reactiva hasta que ocurra su evento.
+- **Prioridad:** los Nuevos van primero, porque son los unicos que provocan
+  suspensiones. Una reactivacion solo usa RAM que los Nuevos en espera no
+  necesitan, contando la que ya se esta liberando. Asi reactivar nunca obliga a
+  suspender a otro proceso y no se forman ciclos de suspension y reactivacion.
 
 ## Disco y reloj global
 

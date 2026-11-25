@@ -212,6 +212,28 @@ public final class DiskStorage {
         }
     }
 
+    /** Posiciones de swap que ocupa el PCB, en orden ascendente; vacio si no esta en swap. */
+    public int[] getSwapBlocks(int processId) {
+        validateProcessId(processId);
+        mutex.acquireUninterruptibly();
+        try {
+            int count = 0;
+            for (DiskBlock block : blocks) {
+                if (block.contentType() == DiskBlockType.SWAP_OCCUPIED && block.processId() == processId) count++;
+            }
+            int[] positions = new int[count];
+            int found = 0;
+            for (int i = 0; i < blocks.length; i++) {
+                if (blocks[i].contentType() == DiskBlockType.SWAP_OCCUPIED && blocks[i].processId() == processId) {
+                    positions[found++] = i;
+                }
+            }
+            return positions;
+        } finally {
+            mutex.release();
+        }
+    }
+
     private int[] findAvailableBlocks(DiskBlockType type, int count) {
         if (count > blocks.length) return new int[0];
         int[] positions = new int[count];

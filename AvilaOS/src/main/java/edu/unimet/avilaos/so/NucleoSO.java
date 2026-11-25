@@ -82,8 +82,9 @@ public class NucleoSO implements ComponenteReloj {
         if (proceso.esProductorConsumidor()) {
             liberarRecursosBuffer(proceso);
         }
-        // Un proceso ya escrito en swap no ocupa RAM; uno en plena escritura todavia la ocupa.
-        if (!proceso.isEnSwap()) ram.liberar(proceso.getMemoria());
+        // Un proceso ya escrito en swap no ocupa RAM; uno en plena escritura todavia la ocupa,
+        // y uno que se esta leyendo del swap ya tiene su RAM de destino reservada.
+        if (!proceso.isEnSwap() || proceso.reactivacionEnCurso()) ram.liberar(proceso.getMemoria());
         if (proceso.isEnSwap() || proceso.suspensionEnCurso()) disco.getStorage().releaseSwap(proceso.getId());
         proceso.terminar(motivo, ciclo);
         colas.agregarTerminado(proceso);
@@ -192,6 +193,10 @@ public class NucleoSO implements ComponenteReloj {
         while ((resultado = disco.pollCompleted()) != null) {
             if (resultado.operation() == DiskOperation.SUSPEND) {
                 completarSuspension(resultado);
+                continue;
+            }
+            if (resultado.operation() == DiskOperation.REACTIVATE) {
+                completarReactivacion(resultado);
                 continue;
             }
             PCB proceso = buscarEsperandoDisco(resultado, colas::cantidadBloqueados, colas::obtenerBloqueado);
@@ -492,12 +497,56 @@ public class NucleoSO implements ComponenteReloj {
                 colas.agregarListo(p);
                 registrar("admite el proceso " + p + " (nuevo -> listo)");
             } else {
-                demanda += p.getMemoria();
+                // Uno que nunca cabe no debe frenar las reactivaciones
+                if (p.getMemoria() <= ram.getTotal()) demanda += p.getMemoria();
                 suspenderPara(p, demanda);
                 i++;
             }
             p = colas.obtenerNuevo(i);
         }
+        reactivarSuspendidos(demanda);
+    }
+
+    /**
+     * Reactiva Listos/Suspendidos en orden de llegada a esa cola, con la RAM que sobra despues de los Nuevos.
+     * Los Nuevos tienen prioridad porque son los unicos que provocan suspensiones: una reactivacion
+     * solo usa RAM que no necesitan, contando la que ya se esta liberando. Asi una reactivacion nunca
+     * obliga a suspender a otro proceso y no se forman ciclos de suspension y reactivacion.
+     * Bloqueados/Suspendidos no se reactivan: su evento no ha ocurrido.
+     */
+    private void reactivarSuspendidos(int demandaNuevos) {
+        for (int i = 0; i < colas.cantidadListosSuspendidos(); i++) {
+            PCB p = colas.obtenerListoSuspendido(i);
+            if (p == null || p.reactivacionEnCurso()) continue;
+            int sobrante = ram.getLibre() + memoriaEscribiendoseAlSwap() - demandaNuevos;
+            if (p.getMemoria() > Math.min(ram.getLibre(), sobrante)) continue;
+            int[] bloques = disco.getStorage().getSwapBlocks(p.getId());
+            if (bloques.length == 0 || !ram.reservar(p.getMemoria())) continue;
+            DiskRequest lectura = new DiskRequest(p.getId(), p.getNombre(), DiskOperation.REACTIVATE, bloques);
+            if (!disco.addRequest(lectura)) {
+                ram.liberar(p.getMemoria());
+                continue;
+            }
+            p.iniciarReactivacion(lectura);
+            registrar("reactiva " + p + ": reserva " + p.getMemoria() + " de RAM y lee " + bloques.length
+                    + " bloques del swap con la solicitud " + lectura.getId());
+        }
+    }
+
+    /** Termina la lectura del swap: libera sus bloques y el proceso vuelve a Listo con su contexto intacto. */
+    private void completarReactivacion(DiskCompletion resultado) {
+        PCB proceso = null;
+        for (int i = 0; i < colas.cantidadListosSuspendidos() && proceso == null; i++) {
+            PCB candidato = colas.obtenerListoSuspendido(i);
+            DiskRequest lectura = candidato == null ? null : candidato.getSolicitudReactivacion();
+            if (lectura != null && lectura.getId() == resultado.requestId()) proceso = candidato;
+        }
+        // Si termino antes (por deadline), finalizar ya libero su RAM reservada y su swap.
+        if (proceso == null || !colas.quitarListoSuspendido(proceso)) return;
+        disco.getStorage().releaseSwap(proceso.getId());
+        proceso.completarReactivacion();
+        colas.agregarListo(proceso);
+        registrar("lee " + proceso + " del swap y libera sus bloques (listo/suspendido -> listo)");
     }
 
     /**
