@@ -47,7 +47,6 @@ public class DialogoCrearProceso extends JDialog {
     private static final String DATOS_READ = "read";
 
     private final JTextField txtNombre = new JTextField(15);
-    private final JTextField txtSolicitante = new JTextField(15);
     private final JSpinner spnInstrucciones = new JSpinner(new SpinnerNumberModel(20, MIN_INSTRUCCIONES, MAX_INSTRUCCIONES, 1));
     private final JSpinner spnMemoria = new JSpinner(new SpinnerNumberModel(32, MIN_MEMORIA, MAX_MEMORIA, 1));
     private final JSpinner spnPrioridad = new JSpinner(new SpinnerNumberModel(5, MIN_PRIORIDAD, MAX_PRIORIDAD, 1));
@@ -63,16 +62,19 @@ public class DialogoCrearProceso extends JDialog {
 
     private final long cicloActual;
     private final String rutaLectura;
+    private final String solicitante;
     private PCB procesoCreado = null;
 
     public DialogoCrearProceso(Frame duenio, long cicloActual) {
-        this(duenio, cicloActual, null);
+        this(duenio, cicloActual, null, null);
     }
 
-    public DialogoCrearProceso(Frame duenio, long cicloActual, String rutaLectura) {
+    /** @param solicitante identidad del modo de uso actual que firma el READ */
+    public DialogoCrearProceso(Frame duenio, long cicloActual, String rutaLectura, String solicitante) {
         super(duenio, "Crear proceso", true);
         this.cicloActual = cicloActual;
         this.rutaLectura = rutaLectura;
+        this.solicitante = solicitante;
 
         JPanel campos = new JPanel(new GridLayout(0, 2, 8, 6));
         campos.setBorder(BorderFactory.createEmptyBorder(10, 10, 4, 10));
@@ -127,7 +129,7 @@ public class DialogoCrearProceso extends JDialog {
             JPanel read = seccion();
             agregarCampo(read, "Operación:", new JLabel("READ"));
             agregarCampo(read, "Ruta:", new JLabel(rutaLectura));
-            agregarCampo(read, "Solicitante (vacío para acceso público):", txtSolicitante);
+            agregarCampo(read, "Solicitante:", new JLabel(solicitante));
             datosTipo.add(read, DATOS_READ);
         }
     }
@@ -174,10 +176,8 @@ public class DialogoCrearProceso extends JDialog {
             return;
         }
         TipoProceso tipo = (TipoProceso) comboTipo.getSelectedItem();
-        String solicitante = txtSolicitante.getText().strip();
         OperacionArchivo operacion = rutaLectura == null ? null
-                : new OperacionArchivo(DiskOperation.READ, rutaLectura,
-                        solicitante.isEmpty() ? null : solicitante, 0, null);
+                : new OperacionArchivo(DiskOperation.READ, rutaLectura, solicitante, 0, null);
         PCB pcb = new PCB(txtNombre.getText().trim(), 1, tipo, valor(spnPrioridad),
                 valor(spnMemoria), valor(spnInstrucciones), valor(spnDeadline), cicloActual, operacion);
         if (operacion == null && tipo == TipoProceso.IO_BOUND) {

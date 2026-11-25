@@ -14,20 +14,19 @@ final class DialogoOperacionArchivo {
 
     private DialogoOperacionArchivo() { }
 
-    static OperacionArchivo renombrar(Component padre, String ruta) {
+    static OperacionArchivo renombrar(Component padre, String ruta, String solicitante) {
         JPanel campos = new JPanel(new GridLayout(0, 2, 8, 6));
         JTextField nuevoNombre = new JTextField(20);
-        JTextField solicitante = new JTextField("admin");
         campos.add(new JLabel("Entrada"));
         campos.add(new JLabel(ruta));
         campos.add(new JLabel("Nombre nuevo"));
         campos.add(nuevoNombre);
         campos.add(new JLabel("Solicitante"));
-        campos.add(solicitante);
+        campos.add(new JLabel(solicitante));
         while (JOptionPane.showConfirmDialog(padre, campos, "Renombrar",
                 JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE) == JOptionPane.OK_OPTION) {
             try {
-                return new OperacionArchivo(DiskOperation.UPDATE, ruta, solicitante.getText().strip(), 0,
+                return new OperacionArchivo(DiskOperation.UPDATE, ruta, solicitante, 0,
                         nuevoNombre.getText().strip());
             } catch (IllegalArgumentException e) {
                 mostrarError(padre, e.getMessage());
@@ -36,19 +35,18 @@ final class DialogoOperacionArchivo {
         return null;
     }
 
-    static OperacionArchivo eliminar(Component padre, String ruta) {
+    static OperacionArchivo eliminar(Component padre, String ruta, String solicitante) {
         JPanel campos = new JPanel(new GridLayout(0, 2, 8, 6));
-        JTextField solicitante = new JTextField("admin");
         campos.add(new JLabel("Entrada"));
         campos.add(new JLabel(ruta));
         campos.add(new JLabel("Solicitante"));
-        campos.add(solicitante);
+        campos.add(new JLabel(solicitante));
         campos.add(new JLabel("Si es un directorio, se elimina todo su contenido."));
         campos.add(new JLabel(""));
         while (JOptionPane.showConfirmDialog(padre, campos, "Eliminar",
                 JOptionPane.OK_CANCEL_OPTION, JOptionPane.WARNING_MESSAGE) == JOptionPane.OK_OPTION) {
             try {
-                return new OperacionArchivo(DiskOperation.DELETE, ruta, solicitante.getText().strip(), 0, null);
+                return new OperacionArchivo(DiskOperation.DELETE, ruta, solicitante, 0, null);
             } catch (IllegalArgumentException e) {
                 mostrarError(padre, e.getMessage());
             }

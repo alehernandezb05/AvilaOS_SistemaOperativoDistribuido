@@ -21,11 +21,13 @@ final class DialogoCrearEntrada {
 
     private DialogoCrearEntrada() { }
 
-    static OperacionArchivo solicitar(Component padre, String directorio, int maxBloques) {
+    /** Solo el administrador puede elegir crear un directorio. */
+    static OperacionArchivo solicitar(Component padre, String directorio, int maxBloques, String solicitante,
+                                      boolean permitirDirectorio) {
         JPanel campos = new JPanel(new GridLayout(0, 2, 8, 6));
         JTextField nombre = new JTextField(20);
-        JTextField solicitante = new JTextField("admin");
-        JComboBox<Tipo> tipo = new JComboBox<>(new Tipo[] {Tipo.FILE, Tipo.DIRECTORY});
+        JComboBox<Tipo> tipo = new JComboBox<>(permitirDirectorio
+                ? new Tipo[] {Tipo.FILE, Tipo.DIRECTORY} : new Tipo[] {Tipo.FILE});
         JSpinner bloques = new JSpinner(new SpinnerNumberModel(1, 1, maxBloques, 1));
         tipo.setRenderer(new DefaultListCellRenderer() {
             @Override
@@ -45,7 +47,7 @@ final class DialogoCrearEntrada {
         campos.add(new JLabel("Tamaño en bloques (1–" + maxBloques + ")"));
         campos.add(bloques);
         campos.add(new JLabel("Solicitante"));
-        campos.add(solicitante);
+        campos.add(new JLabel(solicitante));
 
         while (JOptionPane.showConfirmDialog(padre, campos, "Crear archivo o directorio",
                 JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE) == JOptionPane.OK_OPTION) {
@@ -57,7 +59,7 @@ final class DialogoCrearEntrada {
                 }
                 return new OperacionArchivo(DiskOperation.CREATE,
                         SistemaArchivos.rutaHija(directorio, nombre.getText().strip()),
-                        solicitante.getText().strip(), cantidad, null);
+                        solicitante, cantidad, null);
             } catch (ParseException e) {
                 mostrarError(padre, "El tamaño debe ser un entero entre 1 y " + maxBloques + ".");
             } catch (IllegalArgumentException e) {

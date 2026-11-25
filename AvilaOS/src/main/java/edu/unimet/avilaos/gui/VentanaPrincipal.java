@@ -5,9 +5,11 @@ import edu.unimet.avilaos.config.ArchivoConfiguracion;
 import edu.unimet.avilaos.config.ArchivoSistemaArchivos;
 import edu.unimet.avilaos.config.Configuracion;
 import edu.unimet.avilaos.config.ConfiguracionInvalidaException;
+import edu.unimet.avilaos.so.ModoUsuario;
 import edu.unimet.avilaos.so.PCB;
 import edu.unimet.avilaos.so.TipoProceso;
 import edu.unimet.avilaos.so.archivos.OperacionArchivo;
+import edu.unimet.avilaos.so.archivos.SesionUsuario;
 import edu.unimet.avilaos.so.archivos.SistemaArchivos;
 import java.awt.BorderLayout;
 import java.awt.Dimension;
@@ -112,6 +114,7 @@ public class VentanaPrincipal extends JFrame {
         setSize(1400, 850);
         setLocationRelativeTo(null);
 
+        aplicarSesion();
         // javax.swing.Timer corre en el hilo de Swing, asi que puede tocar los componentes
         refresco = new Timer(REFRESCO_MS, e -> actualizar());
         refresco.start();
@@ -135,6 +138,7 @@ public class VentanaPrincipal extends JFrame {
         panelControles.alCrearProceso(e -> abrirDialogoCrearProceso());
         panelControles.alGuardarConfiguracion(e -> guardarConfiguracion());
         panelControles.alCargarConfiguracion(e -> cargarConfiguracion());
+        panelControles.alCambiarModo(this::cambiarModo);
     }
 
     /** Guarda en un JSON los parametros actuales del computador. */
@@ -241,27 +245,25 @@ public class VentanaPrincipal extends JFrame {
     }
 
     private void abrirDialogoCrearLectura(String ruta) {
-        DialogoCrearProceso dialogo = new DialogoCrearProceso(this, simulador.getCicloActual(), ruta);
+        DialogoCrearProceso dialogo = new DialogoCrearProceso(this, simulador.getCicloActual(), ruta,
+                simulador.getSesion().solicitante());
         dialogo.setVisible(true);
         PCB proceso = dialogo.getProcesoCreado();
         if (proceso != null) {
-            simulador.agregarProceso(proceso);
+            solicitar(proceso);
         }
     }
 
     private void abrirDialogoCrearEntrada(String directorio) {
         OperacionArchivo operacion = DialogoCrearEntrada.solicitar(this, directorio,
-                simulador.getDisco().getTotalBlocks());
-        if (operacion != null) {
-            simulador.agregarProceso(new PCB("Crear " + operacion.ruta(), 1, TipoProceso.IO_BOUND, 1, 1, 1,
-                    DialogoCrearProceso.MAX_DEADLINE, simulador.getCicloActual(), operacion));
-        }
+                simulador.getDisco().getTotalBlocks(), simulador.getSesion().solicitante(),
+                simulador.getSesion().esAdministrador());
+        enviarOperacion(operacion, "Crear ");
     }
 
     private void abrirDialogoRenombrar(String ruta) {
-        OperacionArchivo operacion = DialogoOperacionArchivo.renombrar(this, ruta);
-        enviarOperacion(operacion, "Renombrar ");
-        if (operacion != null) {
+        OperacionArchivo operacion = DialogoOperacionArchivo.renombrar(this, ruta, simulador.getSesion().solicitante());
+        if (enviarOperacion(operacion, "Renombrar ")) {
             String padre = ruta.substring(0, ruta.lastIndexOf('/'));
             panelArchivos.seguirRenombre(ruta,
                     SistemaArchivos.rutaHija(padre.isEmpty() ? "/" : padre, operacion.nuevoNombre()));
@@ -269,14 +271,42 @@ public class VentanaPrincipal extends JFrame {
     }
 
     private void abrirDialogoEliminar(String ruta) {
-        enviarOperacion(DialogoOperacionArchivo.eliminar(this, ruta), "Eliminar ");
+        enviarOperacion(DialogoOperacionArchivo.eliminar(this, ruta, simulador.getSesion().solicitante()), "Eliminar ");
     }
 
     /** La interfaz solo crea el proceso de E/S; el sistema de archivos cambia cuando el disco lo atiende. */
-    private void enviarOperacion(OperacionArchivo operacion, String prefijoNombre) {
-        if (operacion != null) {
-            simulador.agregarProceso(new PCB(prefijoNombre + operacion.ruta(), 1, TipoProceso.IO_BOUND, 1, 1, 1,
-                    DialogoCrearProceso.MAX_DEADLINE, simulador.getCicloActual(), operacion));
+    private boolean enviarOperacion(OperacionArchivo operacion, String prefijoNombre) {
+        return operacion != null && solicitar(new PCB(prefijoNombre + operacion.ruta(), 1, TipoProceso.IO_BOUND,
+                1, 1, 1, DialogoCrearProceso.MAX_DEADLINE, simulador.getCicloActual(), operacion));
+    }
+
+    /** El simulador valida el modo de uso; un rechazo se explica y la simulacion sigue. */
+    private boolean solicitar(PCB proceso) {
+        try {
+            simulador.solicitarProceso(proceso);
+            return true;
+        } catch (IllegalArgumentException e) {
+            JOptionPane.showMessageDialog(this, e.getMessage(), "Acceso denegado", JOptionPane.WARNING_MESSAGE);
+            return false;
         }
+    }
+
+    /** Cambia el modo de uso y habilita solo lo que ese modo puede hacer. */
+    private void cambiarModo(ModoUsuario modo, String usuario) {
+        try {
+            simulador.setSesion(new SesionUsuario(modo, usuario));
+        } catch (IllegalArgumentException e) {
+            error(e.getMessage());
+        }
+        aplicarSesion();
+    }
+
+    private void aplicarSesion() {
+        SesionUsuario sesion = simulador.getSesion();
+        boolean admin = sesion.esAdministrador();
+        panelControles.setSesion(sesion);
+        panelComputador.setPoliticaEditable(admin);
+        panelDisco.setControlesEditables(admin);
+        panelArchivos.setAdministrador(admin);
     }
 }
