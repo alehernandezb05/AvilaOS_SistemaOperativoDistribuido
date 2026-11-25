@@ -94,7 +94,7 @@ final class PruebaRead {
         comprobar(metricas.getTerminados() == 8 && metricas.getCompletados() == 5
                 && metricas.getCumplimiento() == 100.0, "Un rechazo de E/S no cuenta como deadline vencido.");
         String log = String.join("\n", sim.getLog().obtenerDesde(0));
-        comprobar(log.contains("UPDATE requiere newName") && log.contains("DELETE todavía no está disponible")
+        comprobar(log.contains("UPDATE requiere newName") && log.contains("DELETE denegado")
                 && log.contains("encola solicitud") && log.contains("El disco atiende") && log.contains("bloqueado -> listo"),
                 "El registro explica encolado, atención, fin y rechazos.");
     }

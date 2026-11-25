@@ -150,6 +150,34 @@ public final class DiskStorage {
         }
     }
 
+    /** Cambia la ruta guardada en los bloques de un archivo, o de todos los archivos bajo un directorio. */
+    public void renamePath(String oldPath, String newPath) {
+        validatePath(oldPath);
+        validatePath(newPath);
+        String oldPrefix = oldPath + "/";
+        mutex.acquireUninterruptibly();
+        try {
+            for (FileReservation reservation : fileReservations) {
+                if (reservation != null && (reservation.filePath.equals(oldPath)
+                        || reservation.filePath.startsWith(oldPrefix))) {
+                    throw new IllegalArgumentException("Hay una creación pendiente dentro de " + oldPath + ".");
+                }
+            }
+            for (int i = 0; i < blocks.length; i++) {
+                String path = blocks[i].filePath();
+                if (path == null) continue;
+                String renamed;
+                if (path.equals(oldPath)) renamed = newPath;
+                else if (path.startsWith(oldPrefix)) renamed = newPath + path.substring(oldPath.length());
+                else continue;
+                blocks[i] = new DiskBlock(i, blocks[i].contentType(), renamed, blocks[i].processId(),
+                        blocks[i].nextBlock());
+            }
+        } finally {
+            mutex.release();
+        }
+    }
+
     /** Devuelve las posiciones del PCB o un arreglo vacío si el área de swap no alcanza. */
     public int[] allocateSwap(int processId, int count) {
         validateProcessId(processId);

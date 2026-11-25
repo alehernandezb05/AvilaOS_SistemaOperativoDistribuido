@@ -80,7 +80,8 @@ public class VentanaPrincipal extends JFrame {
         JScrollPane scrollComputadores = new JScrollPane(panelComputador);
         scrollComputadores.getVerticalScrollBar().setUnitIncrement(16);
         panelArchivos = new PanelSistemaArchivos(simulador.getSistemaArchivos(), simulador.getDisco(), rutaSeleccionada,
-                this::cargarSistemaArchivos, this::abrirDialogoCrearLectura, this::abrirDialogoCrearEntrada);
+                this::cargarSistemaArchivos, this::abrirDialogoCrearLectura, this::abrirDialogoCrearEntrada,
+                this::abrirDialogoRenombrar, this::abrirDialogoEliminar);
         JTabbedPane vistas = new JTabbedPane();
         vistas.addTab("Computador", scrollComputadores);
         vistas.addTab("Sistema de archivos", panelArchivos);
@@ -233,6 +234,28 @@ public class VentanaPrincipal extends JFrame {
                 simulador.getDisco().getTotalBlocks());
         if (operacion != null) {
             simulador.agregarProceso(new PCB("Crear " + operacion.ruta(), 1, TipoProceso.IO_BOUND, 1, 1, 1,
+                    DialogoCrearProceso.MAX_DEADLINE, simulador.getCicloActual(), operacion));
+        }
+    }
+
+    private void abrirDialogoRenombrar(String ruta) {
+        OperacionArchivo operacion = DialogoOperacionArchivo.renombrar(this, ruta);
+        enviarOperacion(operacion, "Renombrar ");
+        if (operacion != null) {
+            String padre = ruta.substring(0, ruta.lastIndexOf('/'));
+            panelArchivos.seguirRenombre(ruta,
+                    SistemaArchivos.rutaHija(padre.isEmpty() ? "/" : padre, operacion.nuevoNombre()));
+        }
+    }
+
+    private void abrirDialogoEliminar(String ruta) {
+        enviarOperacion(DialogoOperacionArchivo.eliminar(this, ruta), "Eliminar ");
+    }
+
+    /** La interfaz solo crea el proceso de E/S; el sistema de archivos cambia cuando el disco lo atiende. */
+    private void enviarOperacion(OperacionArchivo operacion, String prefijoNombre) {
+        if (operacion != null) {
+            simulador.agregarProceso(new PCB(prefijoNombre + operacion.ruta(), 1, TipoProceso.IO_BOUND, 1, 1, 1,
                     DialogoCrearProceso.MAX_DEADLINE, simulador.getCicloActual(), operacion));
         }
     }

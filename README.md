@@ -40,14 +40,31 @@ El JSON de procesos asigna el computador 1 y el tipo `IO_BOUND`. Si se omiten,
 vale 0. `requester` es la identidad del usuario dentro de la simulación.
 Si se omite, la lectura se limita a archivos públicos. Para leer un archivo
 privado, el solicitante debe coincidir con su dueño.
-El ejemplo ejecuta cinco lecturas y registra tres errores de E/S. Los dos
-`UPDATE` requieren `newName` y `DELETE` está pendiente de implementación.
+El ejemplo ejecuta cinco lecturas y registra tres errores de E/S: los dos
+`UPDATE` no traen `newName` ni `requester` y el `DELETE` no trae `requester`.
 
 Selecciona un directorio y pulsa **Crear archivo o directorio…** para encolar
 un proceso CREATE. El árbol, la tabla y el mapa muestran el cambio al terminar
 la E/S. Se registra el PCB creador y la entrada nace privada. En esta simulación
 `admin` puede crear en cualquier directorio. Los demás solicitantes solo
 pueden crear archivos en sus propios directorios.
+
+Selecciona una entrada y pulsa **Renombrar…** o **Eliminar…** para encolar un
+proceso UPDATE o DELETE. La interfaz solo crea el proceso: el árbol, la tabla y
+el mapa cambian cuando el disco termina la solicitud. Renombrar usa un ciclo de
+metadatos, solo lo puede pedir `admin` y, si es un directorio, actualiza la ruta
+de todos sus descendientes sin tocar sus cadenas de bloques. Eliminar lo pueden
+pedir `admin` o el dueño de un archivo; el disco recorre los bloques de cada
+archivo y al terminar los libera. Eliminar un directorio quita todo su
+contenido con una sola solicitud.
+
+Se rechazan, con el motivo en el log y el proceso en Terminado por error de E/S:
+un nombre destino ausente, igual al actual o que ya existe, un solicitante sin
+permiso, una entrada que no existe o ya fue eliminada, la raíz y una entrada
+que tiene otra operación pendiente (también sus ancestros y descendientes).
+Un UPDATE o DELETE cuyo proceso vence antes de que el disco termine no se aplica.
+En el JSON, UPDATE requiere `newName` (solo el nombre, sin `/`) y `requester`;
+DELETE requiere `requester`.
 
 En el JSON, CREATE requiere `requester` para autorizar la ejecución y
 `fileSizeBlocks` para elegir qué crear. Un tamaño positivo indica un archivo
