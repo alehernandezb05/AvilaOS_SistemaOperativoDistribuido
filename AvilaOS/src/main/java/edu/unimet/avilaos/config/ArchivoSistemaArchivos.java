@@ -2,6 +2,7 @@ package edu.unimet.avilaos.config;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
+import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParseException;
@@ -9,11 +10,15 @@ import com.google.gson.Strictness;
 import edu.unimet.avilaos.hardware.disco.DiskScheduler;
 import edu.unimet.avilaos.so.archivos.SistemaArchivos;
 import edu.unimet.avilaos.so.archivos.SistemaArchivos.Entrada;
+import edu.unimet.avilaos.so.archivos.SistemaArchivos.Nodo;
 import edu.unimet.avilaos.so.archivos.SistemaArchivos.Permiso;
 import edu.unimet.avilaos.so.archivos.SistemaArchivos.Tipo;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 
 import static edu.unimet.avilaos.config.CamposJson.entero;
 import static edu.unimet.avilaos.config.CamposJson.objeto;
@@ -22,8 +27,67 @@ import static edu.unimet.avilaos.config.CamposJson.texto;
 public final class ArchivoSistemaArchivos {
 
     private static final Gson GSON = new GsonBuilder().setStrictness(Strictness.STRICT).create();
+    private static final Gson GSON_LEGIBLE = new GsonBuilder().setPrettyPrinting().create();
 
     private ArchivoSistemaArchivos() { }
+
+    /**
+     * Guarda el estado publicado del sistema de archivos (lo que muestran el arbol y la tabla), no la carga
+     * inicial: las operaciones que el disco todavia no termino no se incluyen. Los archivos de mas de un
+     * bloque llevan su cadena exacta en blockChain. Se escribe a un archivo temporal, se vuelve a leer con
+     * las mismas validaciones de carga y solo entonces reemplaza al destino, asi un fallo no deja un JSON a medias.
+     */
+    public static void guardar(SistemaArchivos sistema, Path archivo) throws IOException, ConfiguracionInvalidaException {
+        JsonObject raiz = new JsonObject();
+        JsonObject disco = new JsonObject();
+        disco.addProperty("totalBlocks", sistema.bloquesDisco());
+        disco.addProperty("initialHead", sistema.cabezalInicial());
+        raiz.add("diskConfig", disco);
+        JsonArray entradas = new JsonArray();
+        agregarHijos(sistema.vista().raiz(), entradas);
+        raiz.add("fileSystem", entradas);
+
+        Path carpeta = archivo.toAbsolutePath().getParent();
+        Path temporal = Files.createTempFile(carpeta, archivo.getFileName().toString(), ".tmp");
+        try {
+            Files.writeString(temporal, GSON_LEGIBLE.toJson(raiz), StandardCharsets.UTF_8);
+            cargar(temporal);
+            try {
+                Files.move(temporal, archivo, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+            } catch (AtomicMoveNotSupportedException e) {
+                Files.move(temporal, archivo, StandardCopyOption.REPLACE_EXISTING);
+            }
+        } finally {
+            Files.deleteIfExists(temporal);
+        }
+    }
+
+    /** En preorden: cada directorio aparece antes que su contenido. La raiz no se escribe. */
+    private static void agregarHijos(Nodo nodo, JsonArray destino) {
+        for (int i = 0; i < nodo.cantidadHijos(); i++) {
+            Nodo hijo = nodo.hijo(i);
+            destino.add(escribirEntrada(hijo.entrada()));
+            agregarHijos(hijo, destino);
+        }
+    }
+
+    private static JsonObject escribirEntrada(Entrada entrada) {
+        JsonObject objeto = new JsonObject();
+        objeto.addProperty("path", entrada.ruta());
+        objeto.addProperty("type", entrada.tipo() == Tipo.FILE ? "FILE" : "DIRECTORY");
+        if (entrada.tipo() == Tipo.FILE) {
+            objeto.addProperty("startBlock", entrada.primerBloque());
+            objeto.addProperty("blocks", entrada.bloques());
+            if (entrada.bloques() > 1) {
+                JsonArray cadena = new JsonArray();
+                for (int bloque : entrada.cadena()) cadena.add(bloque);
+                objeto.add("blockChain", cadena);
+            }
+        }
+        objeto.addProperty("owner", entrada.duenio());
+        objeto.addProperty("permissions", entrada.permiso() == Permiso.PUBLIC ? "public" : "private");
+        return objeto;
+    }
 
     public static SistemaArchivos cargar(Path archivo) throws IOException, ConfiguracionInvalidaException {
         String json = Files.readString(archivo);

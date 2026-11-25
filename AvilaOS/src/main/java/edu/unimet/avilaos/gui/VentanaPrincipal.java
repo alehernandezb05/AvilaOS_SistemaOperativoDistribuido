@@ -83,7 +83,7 @@ public class VentanaPrincipal extends JFrame {
         JScrollPane scrollComputadores = new JScrollPane(panelComputador);
         scrollComputadores.getVerticalScrollBar().setUnitIncrement(16);
         panelArchivos = new PanelSistemaArchivos(simulador.getSistemaArchivos(), simulador.getDisco(), rutaSeleccionada,
-                this::cargarSistemaArchivos, this::abrirDialogoCrearLectura, this::abrirDialogoCrearEntrada,
+                this::cargarSistemaArchivos, this::guardarSistemaArchivos, this::abrirDialogoCrearLectura, this::abrirDialogoCrearEntrada,
                 this::abrirDialogoRenombrar, this::abrirDialogoEliminar);
         panelDisco = new PanelDisco(simulador.getDisco());
         panelDisco.alCambiarPolitica(p -> {
@@ -183,6 +183,29 @@ public class VentanaPrincipal extends JFrame {
                 "Cargar la configuracion reinicia la simulacion y se pierde el estado actual. Continuar?",
                 "Cargar configuracion", JOptionPane.YES_NO_OPTION) == JOptionPane.YES_OPTION) {
             reiniciarCon(config, simulador.getSistemaArchivos());
+        }
+    }
+
+    /** Guarda el arbol, dueños, permisos y cadenas tal como estan ahora, para recargarlos con otros procesos. */
+    private void guardarSistemaArchivos() {
+        SistemaArchivos sistema = simulador.getSistemaArchivos();
+        if (sistema == null) return;
+        Path archivo = SelectorArchivoJson.elegirParaGuardar(this);
+        if (archivo == null) return;
+        if (Files.exists(archivo) && JOptionPane.showConfirmDialog(this,
+                "El archivo " + archivo.getFileName() + " ya existe. Reemplazarlo?", "Guardar sistema de archivos",
+                JOptionPane.YES_NO_OPTION) != JOptionPane.YES_OPTION) {
+            return;
+        }
+        try {
+            ArchivoSistemaArchivos.guardar(sistema, archivo);
+            simulador.getLog().registrar(simulador.getCicloActual(), "Se guarda el sistema de archivos en " + archivo);
+            JOptionPane.showMessageDialog(this, "Sistema de archivos guardado en " + archivo,
+                    "Guardar sistema de archivos", JOptionPane.INFORMATION_MESSAGE);
+        } catch (IOException e) {
+            error("No se pudo guardar el archivo; el anterior queda igual: " + e.getMessage());
+        } catch (ConfiguracionInvalidaException e) {
+            error("El estado no se pudo guardar de forma válida; el archivo anterior queda igual: " + e.getMessage());
         }
     }
 

@@ -42,11 +42,12 @@ final class PanelSistemaArchivos extends JPanel {
     private final JButton renombrar = new JButton("Renombrar…");
     private final JButton eliminar = new JButton("Eliminar…");
     private final JButton boton = new JButton("Cargar sistema de archivos…");
+    private final JButton guardar = new JButton("Guardar sistema de archivos…");
     private boolean administrador = true;
     private String renombreDesde;
     private String renombreHasta;
 
-    PanelSistemaArchivos(SistemaArchivos sistema, DiskScheduler disco, String seleccion, Runnable cargar,
+    PanelSistemaArchivos(SistemaArchivos sistema, DiskScheduler disco, String seleccion, Runnable cargar, Runnable alGuardar,
                          Consumer<String> alLeer, Consumer<String> alCrear,
                          Consumer<String> alRenombrar, Consumer<String> alEliminar) {
         super(new BorderLayout(6, 6));
@@ -56,6 +57,9 @@ final class PanelSistemaArchivos extends JPanel {
         boton.addActionListener(e -> cargar.run());
         JPanel controles = new JPanel(new FlowLayout(FlowLayout.LEFT));
         controles.add(boton);
+        guardar.setEnabled(sistema != null);
+        guardar.addActionListener(e -> alGuardar.run());
+        controles.add(guardar);
         leer.setEnabled(false);
         leer.addActionListener(e -> alLeer.accept(rutaSeleccionada()));
         controles.add(leer);
@@ -155,6 +159,7 @@ final class PanelSistemaArchivos extends JPanel {
     void setAdministrador(boolean administrador) {
         this.administrador = administrador;
         boton.setEnabled(administrador);
+        guardar.setEnabled(administrador && sistema != null);
         mostrarDetalle();
     }
 
