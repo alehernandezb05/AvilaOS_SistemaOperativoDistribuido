@@ -27,7 +27,8 @@ import javax.swing.JTable;
  */
 public class PanelComputador extends JPanel {
 
-    private static final String[] NOMBRES_COLAS = {"Nuevos", "Listos", "Bloqueados", "Terminados"};
+    private static final String[] NOMBRES_COLAS = {"Nuevos", "Listos", "Bloqueados",
+        "Listos/Suspendidos", "Bloqueados/Suspendidos", "Terminados"};
 
     private final Computador computador;
 
@@ -140,7 +141,9 @@ public class PanelComputador extends JPanel {
         actualizarCola(0, colas::cantidadNuevos, colas::obtenerNuevo);
         actualizarCola(1, colas::cantidadListos, colas::obtenerListo);
         actualizarCola(2, colas::cantidadBloqueados, colas::obtenerBloqueado);
-        actualizarCola(3, colas::cantidadTerminados, colas::obtenerTerminado);
+        actualizarCola(3, colas::cantidadListosSuspendidos, colas::obtenerListoSuspendido);
+        actualizarCola(4, colas::cantidadBloqueadosSuspendidos, colas::obtenerBloqueadoSuspendido);
+        actualizarCola(5, colas::cantidadTerminados, colas::obtenerTerminado);
     }
 
     /** Copia la cola a un arreglo y pone la cantidad en el titulo de la pestana. */
