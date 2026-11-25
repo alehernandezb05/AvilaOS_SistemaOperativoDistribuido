@@ -39,9 +39,14 @@ final class PanelSistemaArchivos extends JPanel {
     private final JLabel detalle = new JLabel("Selecciona una entrada del árbol.");
     private final JButton leer = new JButton("Crear proceso READ…");
     private final JButton crear = new JButton("Crear archivo o directorio…");
+    private final JButton renombrar = new JButton("Renombrar…");
+    private final JButton eliminar = new JButton("Eliminar…");
+    private String renombreDesde;
+    private String renombreHasta;
 
     PanelSistemaArchivos(SistemaArchivos sistema, DiskScheduler disco, String seleccion, Runnable cargar,
-                         Consumer<String> alLeer, Consumer<String> alCrear) {
+                         Consumer<String> alLeer, Consumer<String> alCrear,
+                         Consumer<String> alRenombrar, Consumer<String> alEliminar) {
         super(new BorderLayout(6, 6));
         this.sistema = sistema;
         this.disco = disco;
@@ -56,6 +61,12 @@ final class PanelSistemaArchivos extends JPanel {
         crear.setEnabled(false);
         crear.addActionListener(e -> alCrear.accept(rutaSeleccionada()));
         controles.add(crear);
+        renombrar.setEnabled(false);
+        renombrar.addActionListener(e -> alRenombrar.accept(rutaSeleccionada()));
+        controles.add(renombrar);
+        eliminar.setEnabled(false);
+        eliminar.addActionListener(e -> alEliminar.accept(rutaSeleccionada()));
+        controles.add(eliminar);
         if (sistema == null) controles.add(new JLabel("Sin sistema de archivos cargado"));
         add(controles, BorderLayout.NORTH);
 
@@ -110,9 +121,20 @@ final class PanelSistemaArchivos extends JPanel {
                 if (nodo != null) arbol.expandPath(camino(nodo));
             }
             asignacion.actualizar(actual);
+            if (renombreDesde != null && renombreDesde.equals(seleccion) && actual.buscar(seleccion) == null
+                    && actual.buscar(renombreHasta) != null) {
+                seleccion = renombreHasta;
+                renombreDesde = null;
+            }
             seleccionar(seleccion);
         }
         mapa.mostrarBloques(observacion.bloques());
+    }
+
+    /** Tras un UPDATE confirmado, la selección sigue a la entrada renombrada. */
+    void seguirRenombre(String desde, String hasta) {
+        renombreDesde = desde;
+        renombreHasta = hasta;
     }
 
     private void seleccionar(String seleccion) {
@@ -133,6 +155,8 @@ final class PanelSistemaArchivos extends JPanel {
             Entrada entrada = nodo.entrada();
             leer.setEnabled(entrada.tipo() == SistemaArchivos.Tipo.FILE);
             crear.setEnabled(entrada.tipo() == SistemaArchivos.Tipo.DIRECTORY);
+            renombrar.setEnabled(!entrada.ruta().equals("/"));
+            eliminar.setEnabled(!entrada.ruta().equals("/"));
             detalle.setText(entrada.nombre() + "  |  Bloques: " + entrada.bloques()
                     + "  |  Dueño: " + entrada.duenio() + "  |  Permiso: "
                     + (entrada.permiso() == SistemaArchivos.Permiso.PUBLIC ? "Público" : "Privado")
@@ -141,6 +165,8 @@ final class PanelSistemaArchivos extends JPanel {
         } else {
             leer.setEnabled(false);
             crear.setEnabled(false);
+            renombrar.setEnabled(false);
+            eliminar.setEnabled(false);
             detalle.setText("Selecciona una entrada del árbol.");
         }
     }
