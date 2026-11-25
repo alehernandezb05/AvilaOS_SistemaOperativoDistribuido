@@ -159,16 +159,21 @@ public class NucleoSO implements ComponenteReloj {
                 yield new DiskRequest(proceso.getId(), proceso.getNombre(), operacion.tipo(), bloques);
             }
             case CREATE -> archivos.prepararCreacion(operacion, proceso.getId(), proceso.getNombre(), disco.getStorage());
-            case UPDATE -> throw new IllegalArgumentException(operacion.nuevoNombre() == null
-                    ? "UPDATE requiere newName." : "UPDATE todavía no está disponible.");
-            default -> throw new IllegalArgumentException(operacion.tipo() + " todavía no está disponible.");
+            case UPDATE -> archivos.prepararActualizacion(operacion, proceso.getId(), proceso.getNombre());
+            case DELETE -> archivos.prepararEliminacion(operacion, proceso.getId(), proceso.getNombre());
+            default -> throw new IllegalArgumentException(operacion.tipo() + " no es una operación de archivo.");
         };
     }
 
     private void finalizarCreacion(DiskRequest solicitud, boolean confirmar) {
-        if (solicitud.getOperation() == DiskOperation.CREATE) {
-            archivos.finalizarCreacion(solicitud.getId(), confirmar, disco.getStorage());
+        if (cambiaSistemaArchivos(solicitud.getOperation())) {
+            archivos.finalizarOperacion(solicitud.getId(), confirmar, disco.getStorage());
         }
+    }
+
+    private static boolean cambiaSistemaArchivos(DiskOperation operacion) {
+        return operacion == DiskOperation.CREATE || operacion == DiskOperation.UPDATE
+                || operacion == DiskOperation.DELETE;
     }
 
     private void rechazarOperacionArchivo(PCB proceso, String motivo) {
@@ -183,9 +188,9 @@ public class NucleoSO implements ComponenteReloj {
         while ((resultado = disco.pollCompleted()) != null) {
             PCB proceso = buscarBloqueado(resultado);
             if (proceso == null || !colas.quitarBloqueado(proceso)) {
-                // Un CREATE vencido conserva su reserva hasta que el disco deja de usarla.
-                if (archivos != null && resultado.operation() == DiskOperation.CREATE) {
-                    archivos.finalizarCreacion(resultado.requestId(), false, disco.getStorage());
+                // Un CREATE, UPDATE o DELETE vencido no se publica y libera su reserva al drenar el disco.
+                if (archivos != null && cambiaSistemaArchivos(resultado.operation())) {
+                    archivos.finalizarOperacion(resultado.requestId(), false, disco.getStorage());
                 }
                 continue;
             }
@@ -196,6 +201,12 @@ public class NucleoSO implements ComponenteReloj {
                 finalizarCreacion(solicitud, false);
                 rechazarOperacionArchivo(proceso, e.getMessage());
                 continue;
+            }
+            OperacionArchivo hecha = proceso.getOperacionArchivo();
+            if (resultado.operation() == DiskOperation.UPDATE) {
+                registrar("renombra " + hecha.ruta() + " a " + hecha.nuevoNombre());
+            } else if (resultado.operation() == DiskOperation.DELETE) {
+                registrar("elimina " + hecha.ruta() + " y libera sus bloques");
             }
             colas.agregarListo(proceso);
             registrar("termina la solicitud " + resultado.requestId() + " " + resultado.operation()
