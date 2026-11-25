@@ -12,7 +12,7 @@ import java.util.Arrays;
 /** Jerarquía del sistema de archivos, independiente de Swing. */
 public final class SistemaArchivos {
 
-    private static final String ADMINISTRADOR = "admin";
+    static final String ADMINISTRADOR = "admin";
 
     public enum Tipo { DIRECTORY, FILE }
     public enum Permiso { PUBLIC, PRIVATE }
@@ -78,7 +78,8 @@ public final class SistemaArchivos {
             throw new IllegalArgumentException("No existe un archivo en " + ruta + ".");
         }
         Entrada archivo = nodo.entrada;
-        if (archivo.permiso() == Permiso.PRIVATE && !archivo.duenio().equals(solicitante)) {
+        if (archivo.permiso() == Permiso.PRIVATE && !archivo.duenio().equals(solicitante)
+                && !ADMINISTRADOR.equals(solicitante)) {
             throw new IllegalArgumentException("READ denegado: " + ruta + " es privado y pertenece a " + archivo.duenio() + ".");
         }
         return archivo;
@@ -223,6 +224,35 @@ public final class SistemaArchivos {
         } catch (IllegalArgumentException e) {
             if (reserva != null) disco.finishFileReservation(reserva, false);
             throw e;
+        }
+    }
+
+    /**
+     * Revisa solo los permisos de una operacion, sin reservar nada. La interfaz la usa antes de crear
+     * el proceso; al ejecutarse, las mismas reglas se vuelven a aplicar con el estado de ese momento.
+     */
+    public synchronized void comprobarPermiso(OperacionArchivo operacion) {
+        String solicitante = operacion.solicitante();
+        switch (operacion.tipo()) {
+            case READ -> archivoParaLectura(operacion.ruta(), solicitante);
+            case CREATE -> {
+                Nodo padre = buscar(rutaPadre(operacion.ruta()));
+                if (padre == null || padre.entrada.tipo() != Tipo.DIRECTORY) {
+                    throw new IllegalArgumentException("El directorio destino no existe: " + rutaPadre(operacion.ruta()));
+                }
+                validarPermisoCreacion(solicitante, operacion.bloques() == 0, padre.entrada);
+            }
+            case UPDATE -> {
+                if (!ADMINISTRADOR.equals(solicitante)) {
+                    throw new IllegalArgumentException("UPDATE denegado: renombrar requiere administrador.");
+                }
+            }
+            case DELETE -> {
+                Nodo nodo = buscar(operacion.ruta());
+                if (nodo == null) throw new IllegalArgumentException("No existe " + operacion.ruta() + ".");
+                validarPermisoEliminacion(solicitante, nodo.entrada);
+            }
+            default -> throw new IllegalArgumentException(operacion.tipo() + " no es una operación de archivo.");
         }
     }
 
