@@ -219,14 +219,44 @@ public class DiskScheduler implements ComponenteReloj {
     public DiskSnapshot getSnapshot() {
         mutex.acquireUninterruptibly();
         try {
-            return new DiskSnapshot(currentCycle, currentHead, currentDirection,
-                    activePolicy.getPolicy(), speed, totalHeadMovement, totalRequestsServed,
-                    currentRequest == null ? -1 : currentRequest.getId(),
-                    currentRequest == null || currentRequest.getBlockCount() == 0
-                            ? -1 : currentRequest.blockAt(blockIndex), requestQueue.getTamano());
+            return snapshot();
         } finally {
             mutex.release();
         }
+    }
+
+    /** Estado y cola copiados bajo el mismo semaforo; la solicitud activa va primero. */
+    public DiskQueueView getQueueView() {
+        mutex.acquireUninterruptibly();
+        try {
+            int offset = currentRequest == null ? 0 : 1;
+            DiskQueueEntry[] entries = new DiskQueueEntry[offset + requestQueue.getTamano()];
+            if (currentRequest != null) entries[0] = entry(currentRequest, true);
+            for (int i = 0; i < requestQueue.getTamano(); i++) {
+                entries[offset + i] = entry(requestQueue.obtener(i), false);
+            }
+            return new DiskQueueView(snapshot(), entries);
+        } finally {
+            mutex.release();
+        }
+    }
+
+    private DiskSnapshot snapshot() {
+        return new DiskSnapshot(currentCycle, currentHead, currentDirection,
+                activePolicy.getPolicy(), speed, totalHeadMovement, totalRequestsServed,
+                currentRequest == null ? -1 : currentRequest.getId(),
+                activeTarget(), requestQueue.getTamano());
+    }
+
+    private int activeTarget() {
+        return currentRequest == null || currentRequest.getBlockCount() == 0
+                ? -1 : currentRequest.blockAt(blockIndex);
+    }
+
+    private DiskQueueEntry entry(DiskRequest request, boolean active) {
+        int target = active ? activeTarget() : request.getBlockCount() == 0 ? -1 : request.blockAt(0);
+        return new DiskQueueEntry(request.getId(), request.getProcessId(), request.getProcessName(),
+                request.getOperation(), target, request.getBlockCount(), request.getArrivalCycle(), active);
     }
 
     public DiskRequest[] getPendingRequests() {

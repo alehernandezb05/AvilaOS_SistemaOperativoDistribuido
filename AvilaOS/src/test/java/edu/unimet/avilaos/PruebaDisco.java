@@ -57,6 +57,7 @@ public final class PruebaDisco {
         scan();
         cScan();
         inyeccionYCambio();
+        colaObservable();
         validacion();
         pausaCompartida();
         interrupcion();
@@ -241,6 +242,34 @@ public final class PruebaDisco {
         for (int cycle = 4; cycle <= 6; cycle++) disk.alCiclo(cycle);
         comprobar(disk.pollCompleted().policy() == DiskPolicy.SSTF, "La nueva politica selecciona la siguiente.");
         System.out.println("OK: estrategia inyectable y cambio sin apropiacion ni doble conteo.");
+    }
+
+    private static void colaObservable() {
+        DiskScheduler disk = new DiskScheduler(200, 50, 0, DiskPolicy.FIFO);
+        comprobar(disk.getQueueView().entries().length == 0, "Un disco sin solicitudes muestra la cola vacia.");
+        DiskRequest primera = new DiskRequest(1, "P1", DiskOperation.READ, new int[] {53, 54});
+        DiskRequest segunda = new DiskRequest(2, "P2", DiskOperation.CREATE, 80);
+        DiskRequest metadatos = DiskRequest.metadata(3, "P3", DiskOperation.UPDATE);
+        disk.addRequest(primera);
+        disk.addRequest(segunda);
+        disk.addRequest(metadatos);
+        disk.alCiclo(1);
+        var vista = disk.getQueueView();
+        var filas = vista.entries();
+        comprobar(filas.length == 3 && filas[0].active() && filas[0].requestId() == primera.getId()
+                && !filas[1].active() && filas[1].requestId() == segunda.getId()
+                && filas[2].requestId() == metadatos.getId(),
+                "La activa va primero y las pendientes conservan su orden de llegada.");
+        comprobar(filas[0].targetBlock() == vista.state().targetBlock() && filas[0].targetBlock() == 53
+                && filas[1].targetBlock() == 80 && filas[1].operation() == DiskOperation.CREATE
+                && filas[2].targetBlock() == -1 && filas[2].blockCount() == 0,
+                "Cada fila copia proceso, operacion y destino; metadatos sin bloque.");
+        comprobar(vista.state().pendingCount() == 2 && vista.state().activeRequestId() == primera.getId(),
+                "Estado y cola salen de la misma observacion.");
+        disk.setPolicy(DiskPolicy.SSTF);
+        comprobar(disk.getQueueView().entries()[0].requestId() == primera.getId(),
+                "Cambiar la politica no reemplaza la solicitud activa en la vista.");
+        System.out.println("OK: cola observable con activa, pendientes y destino coherentes.");
     }
 
     private static void validacion() {

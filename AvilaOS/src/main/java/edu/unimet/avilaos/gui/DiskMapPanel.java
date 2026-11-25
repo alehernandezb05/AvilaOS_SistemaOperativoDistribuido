@@ -2,6 +2,7 @@ package edu.unimet.avilaos.gui;
 
 import edu.unimet.avilaos.hardware.disco.DiskBlock;
 import edu.unimet.avilaos.hardware.disco.DiskScheduler;
+import edu.unimet.avilaos.hardware.disco.DiskSnapshot;
 import java.awt.Color;
 import java.awt.Dimension;
 import java.awt.Font;
@@ -17,6 +18,7 @@ public class DiskMapPanel extends JPanel {
     static final Color COLOR_ARCHIVO = new Color(239, 154, 154);
     private DiskScheduler diskScheduler;
     private DiskBlock[] bloquesObservados;
+    private DiskSnapshot estadoObservado;
     private static final int BLOCK_SIZE = 14;
     private static final int BLOCK_MARGIN = 2;
     private static final int BLOCK_STEP = BLOCK_SIZE + BLOCK_MARGIN;
@@ -33,11 +35,18 @@ public class DiskMapPanel extends JPanel {
     public void setDiskScheduler(DiskScheduler diskScheduler) {
         this.diskScheduler = diskScheduler;
         bloquesObservados = null;
+        estadoObservado = null;
         repaint();
     }
 
     void mostrarBloques(DiskBlock[] bloques) {
+        mostrar(bloques, null);
+    }
+
+    /** Pinta bloques y cabezal de una misma observacion; null en estado lo pide al disco. */
+    void mostrar(DiskBlock[] bloques, DiskSnapshot estado) {
         bloquesObservados = bloques;
+        estadoObservado = estado;
         repaint();
     }
 
@@ -55,15 +64,18 @@ public class DiskMapPanel extends JPanel {
         }
 
         DiskBlock[] blocks = bloquesVisibles();
-        int currentHead = diskScheduler.getCurrentHead();
+        // Cabezal, direccion y destino salen de una sola copia para no mezclar ciclos.
+        DiskSnapshot estado = estadoObservado == null ? diskScheduler.getSnapshot() : estadoObservado;
+        int currentHead = estado.currentHead();
+        int destino = estado.targetBlock();
         int totalBlocks = blocks.length;
 
         int cols = columns();
-        
+
         g.setFont(new Font("SansSerif", Font.BOLD, 12));
         g.setColor(Color.BLACK);
-        g.drawString("Estado del Disco (Bloques libres / ocupados) - Cabezal en bloque: " + currentHead 
-                + " [" + diskScheduler.getCurrentDirection() + "]", 10, 15);
+        g.drawString("Cabezal en el bloque " + currentHead + " [" + estado.direction() + "]"
+                + (destino >= 0 ? " - destino: bloque " + destino : ""), 10, 15);
 
         for (int i = 0; i < totalBlocks; i++) {
             int row = i / cols;
@@ -86,6 +98,9 @@ public class DiskMapPanel extends JPanel {
             // Borde
             if (i == currentHead) {
                 g.setColor(Color.RED);
+                g.drawRect(x - 1, y - 1, BLOCK_SIZE + 1, BLOCK_SIZE + 1);
+            } else if (i == destino) {
+                g.setColor(Color.BLUE);
                 g.drawRect(x - 1, y - 1, BLOCK_SIZE + 1, BLOCK_SIZE + 1);
             } else {
                 g.setColor(Color.GRAY);

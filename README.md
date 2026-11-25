@@ -131,15 +131,14 @@ de bloques y el swap se implementan en sus propias tareas. Guardar esta
 configuracion conserva el cabezal inicial, sin guardar el estado de una
 simulacion en curso.
 
-Para probar solo el disco: `./verificar.sh disco`. Para abrir la ventana de
-prueba, ejecutar la clase `edu.unimet.avilaos.gui.TestDiskGUI` en NetBeans, o:
+Para probar solo el disco: `./verificar.sh disco`.
 
-```sh
-mvn compile exec:java -Dexec.mainClass=edu.unimet.avilaos.gui.TestDiskGUI
-```
-
-La ventana incluye ocho solicitudes de prueba, politica FIFO/SSTF, velocidad
-y pausa/reanudacion. Su Timer de Swing solo refresca la vista; el reloj del
-simulador realiza el trabajo. Las solicitudes de esta ventana identifican
-procesos de prueba, sin crear PCBs ni ejecutar CRUD. La vista principal del
-disco, SCAN, C-SCAN, archivos y suspension se completan en los issues #77–#93.
+La pestaña **Disco** de la ventana principal muestra el mapa de bloques
+(libres, archivos, swap disponible y ocupado), el cabezal con su dirección,
+el bloque destino de la solicitud activa y la cola de E/S, con la solicitud
+que se atiende primero y las pendientes en orden de llegada. Desde ahí se
+cambia la política (FIFO, SSTF, SCAN, C-SCAN) y la velocidad del cabezal
+durante la ejecución: la solicitud activa termina con la política que la
+eligió y la nueva política elige la siguiente. La pausa y la duración del
+ciclo son las mismas del reloj global; el Timer de Swing solo refresca la
+vista con una copia del estado tomada en un mismo ciclo.
