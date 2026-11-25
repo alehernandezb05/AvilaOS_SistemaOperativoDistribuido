@@ -148,6 +148,31 @@ cambio de modo posterior. Un rechazo muestra su motivo, queda en el registro,
 no crea el proceso y la simulacion sigue. Los procesos del JSON sin `requester`
 solo acceden a archivos publicos.
 
+## Guardar y recargar el sistema de archivos
+
+**Guardar sistema de archivos…** (pestaña Sistema de archivos, solo administrador)
+escribe el estado actual: jerarquía, dueños, permisos y la cadena exacta de
+bloques de cada archivo. Las operaciones que el disco todavía no terminó no se
+incluyen. El formato es el mismo del ejemplo, con un campo opcional para las
+cadenas de más de un bloque:
+
+```json
+{"path": "/usuarios/datos.bin", "type": "FILE", "startBlock": 106, "blocks": 3,
+ "blockChain": [106, 107, 120], "owner": "admin", "permissions": "private"}
+```
+
+`blockChain` debe empezar en `startBlock` y tener `blocks` posiciones; sin él,
+un archivo de un bloque se lee igual que en el ejemplo. Al cargar se rechazan
+bloques repetidos (ciclos o doble asignación), posiciones fuera del disco,
+tamaños que no coinciden y padres inexistentes. Si los archivos no dejan
+espacio para el swap, la simulación no se crea y se explica el motivo.
+
+El guardado escribe primero un archivo temporal, lo vuelve a leer con las mismas
+validaciones y solo entonces reemplaza al destino, así un fallo no deja un JSON a
+medias ni toca el archivo anterior. Para reiniciar con otros procesos sobre el
+disco guardado: cargar ese JSON y luego **Cargar procesos…**. Los procesos en
+ejecución o suspendidos no se guardan.
+
 ## Disco y reloj global
 
 El computador registra el disco antes del nucleo y de la CPU en el mismo

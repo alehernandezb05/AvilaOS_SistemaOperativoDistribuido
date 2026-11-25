@@ -70,6 +70,7 @@ public final class PruebaDisco {
         PruebaActualizarEliminar.ejecutar();
         PruebaSuspension.ejecutar();
         PruebaPermisos.ejecutar();
+        PruebaPersistencia.ejecutar();
     }
 
     private static void transferencia() {
