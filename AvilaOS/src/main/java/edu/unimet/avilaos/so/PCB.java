@@ -25,6 +25,7 @@ public class PCB {
     private boolean instruccionArchivoEjecutada;
     private DiskRequest solicitudDisco;
     private DiskRequest solicitudSwap;
+    private DiskRequest solicitudReactivacion;
     private boolean enSwap;
     private boolean eventoDuranteSuspension;
     private int ciclosBloqueoActual;
@@ -148,6 +149,17 @@ public class PCB {
 
     /** El evento que esperaba ocurrio mientras se escribia al swap: termina en Listo/Suspendido. */
     void registrarEventoDuranteSuspension() { eventoDuranteSuspension = true; }
+
+    // Reactivacion: la RAM ya esta reservada y se lee el swap; enSwap sigue en true hasta terminar.
+    void iniciarReactivacion(DiskRequest lectura) { solicitudReactivacion = lectura; }
+
+    void completarReactivacion() {
+        solicitudReactivacion = null;
+        enSwap = false;
+    }
+
+    boolean reactivacionEnCurso() { return solicitudReactivacion != null; }
+    DiskRequest getSolicitudReactivacion() { return solicitudReactivacion; }
 
     boolean suspensionEnCurso() { return solicitudSwap != null; }
     DiskRequest getSolicitudSwap() { return solicitudSwap; }
