@@ -30,6 +30,78 @@ public final class PruebaSuspension {
         suspendeAlBloqueadoMasAntiguo();
         eventoDuranteLaEscritura();
         sinVictimaNiSwap();
+        reactivaAlLiberarseRam();
+        bloqueadoSuspendidoNoSeReactiva();
+        nuevosAntesQueReactivaciones();
+    }
+
+    /** A queda Listo/Suspendido; C ocupa su RAM, termina, y A se lee del swap con su contexto. */
+    private static void reactivaAlLiberarseRam() {
+        Escenario e = Escenario.nuevo(32, 100);
+        PCB a = conES("A", 30);
+        e.nucleo().agregarProceso(a);
+        e.nucleo().agregarProceso(conES("B", 2000));
+        e.avanzar(1, 8);
+        int pcAntes = a.getProgramCounter();
+        int restanteAntes = a.getTiempoRestante();
+        PCB c = new PCB("C", 1, TipoProceso.CPU_BOUND, 1, 16, 5, 5000, 0);
+        e.nucleo().agregarProceso(c);
+        long ciclo = 9;
+        while (a.getEstado() != EstadoProceso.LISTO_SUSPENDIDO && ciclo < 400) e.avanzar(ciclo, ciclo++);
+        comprobar(a.getEstado() == EstadoProceso.LISTO_SUSPENDIDO, "A queda Listo/Suspendido.");
+        while (!e.registro().contains("reactiva " + a) && ciclo < 600) e.avanzar(ciclo, ciclo++);
+        comprobar(c.getEstado() == EstadoProceso.TERMINADO && e.registro().contains("reactiva " + a),
+                "Al terminar C y liberar su RAM se reactiva A.");
+        comprobar(a.getEstado() == EstadoProceso.LISTO_SUSPENDIDO && e.ram().getUsada() == 32
+                && e.bloquesSwapDe(a.getId()) == 16,
+                "La RAM de destino se reserva antes de leer y A no pasa a Listo hasta terminar.");
+        e.avanzar(ciclo, ciclo + 7);
+        comprobar(contar(e.registro(), "reactiva " + a) == 1, "No se reactiva dos veces.");
+        e.avanzar(ciclo + 8, ciclo + 150);
+        comprobar(a.getEstado() != EstadoProceso.LISTO_SUSPENDIDO && !a.isEnSwap()
+                && e.bloquesSwapDe(a.getId()) == 0 && e.ram().getUsada() <= 32
+                && e.registro().contains("(listo/suspendido -> listo)"),
+                "Al terminar la lectura pasa a Listo y libera sus bloques de swap.");
+        comprobar(a.getProgramCounter() >= pcAntes && a.getTiempoRestante() <= restanteAntes,
+                "Conserva su program counter e instrucciones restantes.");
+        System.out.println("OK: reactiva Listos/Suspendidos con RAM reservada y lectura real del swap.");
+    }
+
+    private static void bloqueadoSuspendidoNoSeReactiva() {
+        Escenario e = Escenario.nuevo(32, 100);
+        PCB a = conES("A", 2000);
+        e.nucleo().agregarProceso(a);
+        e.nucleo().agregarProceso(conES("B", 2000));
+        e.avanzar(1, 8);
+        PCB c = new PCB("C", 1, TipoProceso.CPU_BOUND, 1, 16, 5, 5000, 0);
+        e.nucleo().agregarProceso(c);
+        e.avanzar(9, 300);
+        comprobar(c.getEstado() == EstadoProceso.TERMINADO && e.ram().getLibre() == 16
+                && a.getEstado() == EstadoProceso.BLOQUEADO_SUSPENDIDO && !e.registro().contains("reactiva "),
+                "Con RAM libre, un Bloqueado/Suspendido sigue en swap hasta que ocurra su evento.");
+        System.out.println("OK: un suspendido cuyo evento no ocurrio no se reactiva.");
+    }
+
+    /** Con un Nuevo esperando, la RAM que se libera es para el Nuevo y no para una reactivacion. */
+    private static void nuevosAntesQueReactivaciones() {
+        Escenario e = Escenario.nuevo(32, 100);
+        PCB a = conES("A", 30);
+        e.nucleo().agregarProceso(a);
+        e.nucleo().agregarProceso(conES("B", 2000));
+        e.avanzar(1, 8);
+        e.nucleo().agregarProceso(new PCB("C", 1, TipoProceso.CPU_BOUND, 1, 16, 2000, 5000, 0));
+        long ciclo = 9;
+        while (a.getEstado() != EstadoProceso.LISTO_SUSPENDIDO && ciclo < 400) e.avanzar(ciclo, ciclo++);
+        PCB d = new PCB("D", 1, TipoProceso.CPU_BOUND, 1, 16, 5, 5000, 0);
+        e.nucleo().agregarProceso(d);
+        e.avanzar(ciclo, ciclo + 400);
+        String log = e.registro();
+        int admiteD = log.indexOf("admite el proceso " + d);
+        int reactivaA = log.indexOf("reactiva " + a);
+        comprobar(admiteD >= 0 && (reactivaA < 0 || reactivaA > admiteD),
+                "El Nuevo que provoco la suspension recibe la RAM antes que la reactivacion.");
+        comprobar(contar(log, "suspende ") == 2, "No hay ciclos de suspension y reactivacion.");
+        System.out.println("OK: los Nuevos tienen prioridad y no se forman ciclos de intercambio.");
     }
 
     /** Un computador de 32 de RAM con disco de 200 bloques y 100 de swap; el cabezal empieza en 50. */
@@ -151,8 +223,9 @@ public final class PruebaSuspension {
         d.avanzar(9, 100);
         comprobar(despues.getEstado() == EstadoProceso.BLOQUEADO_SUSPENDIDO, "Primero queda Bloqueado/Suspendido.");
         d.avanzar(101, 200);
-        comprobar(despues.getEstado() == EstadoProceso.LISTO_SUSPENDIDO
-                && d.registro().contains("(bloqueado/suspendido -> listo/suspendido)"),
+        comprobar(despues.getEstado() != EstadoProceso.BLOQUEADO_SUSPENDIDO
+                && d.registro().contains("termina la E/S del proceso " + despues
+                        + " (bloqueado/suspendido -> listo/suspendido)"),
                 "El evento posterior lo lleva de Bloqueado/Suspendido a Listo/Suspendido.");
         System.out.println("OK: evento durante la escritura al swap y Listo/Suspendido.");
     }
