@@ -125,6 +125,29 @@ Nuevos en espera, contando la que ya se esta escribiendo al swap.
   necesitan, contando la que ya se esta liberando. Asi reactivar nunca obliga a
   suspender a otro proceso y no se forman ciclos de suspension y reactivacion.
 
+## Modos de uso y permisos
+
+El modo de uso (`ModoUsuario`: administrador o usuario) es distinto del modo de
+la CPU (`ModoEjecucion`). Se elige en la barra superior; en modo usuario se
+escribe el nombre del usuario (por ejemplo `user1`) y se aplica con Enter.
+
+| Accion | Administrador | Usuario |
+|---|---|---|
+| Leer archivos | Todos, incluso privados ajenos | Propios o publicos |
+| Crear archivos | En cualquier directorio | Solo en directorios propios |
+| Crear directorios, renombrar | Si | No |
+| Eliminar | Archivos y directorios | Solo archivos propios |
+| Politicas, quantum, velocidad del disco | Si | No |
+| Crear procesos de CPU, cargar o guardar JSON | Si | No |
+
+Cada operacion de archivo guarda su solicitante (`admin` o el nombre del
+usuario), tomado del modo actual y no de un campo editable. El simulador valida
+los permisos antes de crear el proceso y el sistema de archivos los vuelve a
+validar al ejecutarlo, asi que no se pueden eludir desde la interfaz ni con un
+cambio de modo posterior. Un rechazo muestra su motivo, queda en el registro,
+no crea el proceso y la simulacion sigue. Los procesos del JSON sin `requester`
+solo acceden a archivos publicos.
+
 ## Disco y reloj global
 
 El computador registra el disco antes del nucleo y de la CPU en el mismo
