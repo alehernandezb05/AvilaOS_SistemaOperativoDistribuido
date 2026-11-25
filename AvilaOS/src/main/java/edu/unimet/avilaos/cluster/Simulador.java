@@ -18,6 +18,8 @@ import edu.unimet.avilaos.so.Log;
 import edu.unimet.avilaos.so.PCB;
 import edu.unimet.avilaos.so.PoliticaPlanificacion;
 import edu.unimet.avilaos.so.ServicioCluster;
+import edu.unimet.avilaos.so.archivos.OperacionArchivo;
+import edu.unimet.avilaos.so.archivos.SesionUsuario;
 import edu.unimet.avilaos.so.archivos.SistemaArchivos;
 import edu.unimet.avilaos.so.politicas.EDF;
 import edu.unimet.avilaos.so.politicas.FCFS;
@@ -37,6 +39,7 @@ public class Simulador implements ServicioCluster {
     private final SistemaArchivos sistemaArchivos;
     private final boolean procesosCargados;
     private final Log log = new Log();
+    private volatile SesionUsuario sesion = SesionUsuario.administrador();
     private final int latenciaRed;       // ciclos que cuesta cada acceso a un buffer remoto
     // Datos con los que se creo cada proceso, para guardarlos como carga inicial
     private final Lista<ConfigProceso> procesosCreados = new Lista<>();
@@ -166,12 +169,56 @@ public class Simulador implements ServicioCluster {
                 + proceso.getIdComputador() + " (" + proceso.getTipo() + ")");
     }
 
+    /**
+     * Proceso pedido desde la interfaz: se valida con el modo de uso actual antes de crearlo.
+     * Un rechazo se registra, no crea el proceso y la simulacion sigue.
+     */
+    public void solicitarProceso(PCB proceso) {
+        SesionUsuario actual = sesion;
+        OperacionArchivo operacion = proceso.getOperacionArchivo();
+        try {
+            if (operacion == null) {
+                exigirAdministrador("crear procesos que no son de archivos");
+            } else {
+                if (!actual.solicitante().equals(operacion.solicitante())) {
+                    throw new IllegalArgumentException("la operación debe pedirla " + actual.solicitante() + ".");
+                }
+                if (sistemaArchivos == null) throw new IllegalArgumentException("falta cargar el sistema de archivos.");
+                sistemaArchivos.comprobarPermiso(operacion);
+            }
+        } catch (IllegalArgumentException e) {
+            String que = operacion == null ? "el proceso " + proceso.getNombre()
+                    : operacion.tipo() + " " + operacion.ruta();
+            log.registrar(getCicloActual(), "Se rechaza " + que + " en modo " + actual + ": " + e.getMessage());
+            throw e;
+        }
+        agregarProceso(proceso);
+    }
+
+    public SesionUsuario getSesion() { return sesion; }
+
+    public void setSesion(SesionUsuario nueva) {
+        if (nueva == null) throw new IllegalArgumentException("Falta el modo de uso.");
+        if (nueva.equals(sesion)) return;
+        sesion = nueva;
+        log.registrar(getCicloActual(), "Cambia el modo de uso a " + nueva);
+    }
+
+    /** Las politicas y el quantum los gestiona el administrador; tambien se valida aqui, no solo en la interfaz. */
+    private void exigirAdministrador(String accion) {
+        if (!sesion.esAdministrador()) {
+            throw new IllegalArgumentException("En modo usuario no se puede " + accion + ".");
+        }
+    }
+
     public void cambiarPolitica(int idComputador, PoliticaPlanificacion politica) {
+        exigirAdministrador("cambiar la política de CPU");
         getComputador(idComputador).cambiarPolitica(crearEstrategia(politica, quantum));
     }
 
     /** Cambia el quantum en caliente; afecta a los computadores que ya usan Round Robin. */
     public void setQuantum(int quantum) {
+        exigirAdministrador("cambiar el quantum");
         if (quantum < Configuracion.MIN_QUANTUM || quantum > Configuracion.MAX_QUANTUM) {
             throw new IllegalArgumentException("El quantum debe estar entre 0 y " + Configuracion.MAX_QUANTUM + ".");
         }
@@ -300,8 +347,15 @@ public class Simulador implements ServicioCluster {
 
     public DiskScheduler getDisco() { return computadores[0].getDisco(); }
     public SistemaArchivos getSistemaArchivos() { return sistemaArchivos; }
-    public void cambiarPoliticaDisco(DiskPolicy politica) { getDisco().setPolicy(politica); }
-    public void setVelocidadDisco(int velocidad) { getDisco().setSpeed(velocidad); }
+    public void cambiarPoliticaDisco(DiskPolicy politica) {
+        exigirAdministrador("cambiar la política de disco");
+        getDisco().setPolicy(politica);
+    }
+
+    public void setVelocidadDisco(int velocidad) {
+        exigirAdministrador("cambiar la velocidad del disco");
+        getDisco().setSpeed(velocidad);
+    }
 
     public Log getLog() { return log; }
     public int getCantidadComputadores() { return computadores.length; }
