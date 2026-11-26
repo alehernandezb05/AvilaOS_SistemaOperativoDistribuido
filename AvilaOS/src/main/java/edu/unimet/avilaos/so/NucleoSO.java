@@ -28,7 +28,7 @@ public class NucleoSO implements ComponenteReloj {
     private volatile long cicloActual = 0;
 
     public NucleoSO(int idComputador, CPU cpu, RAM ram, EstrategiaPlanificacion estrategia,
-                    DiskScheduler disco, SistemaArchivos archivos) {
+            DiskScheduler disco, SistemaArchivos archivos) {
         this.idComputador = idComputador;
         this.cpu = cpu;
         this.ram = ram;
@@ -74,6 +74,20 @@ public class NucleoSO implements ComponenteReloj {
     }
 
     private void finalizar(PCB proceso, MotivoTerminacion motivo, long ciclo) {
+                if (proceso.getEstado() == EstadoProceso.TERMINADO) {
+            return;
+        }
+                if (disco != null) {
+            DiskRequest solicitud = proceso.getSolicitudDisco();
+
+            disco.cancelRequest(solicitud);
+            disco.cancelRequest(proceso.getSolicitudSwap());
+            disco.cancelRequest(proceso.getSolicitudReactivacion());
+
+            if (solicitud != null && archivos != null) {
+                finalizarCreacion(solicitud, false);
+            }
+        }
         Semaforo esperado = proceso.getSemaforoEsperado();
         if (esperado != null) {
             esperado.quitar(proceso);
@@ -84,8 +98,12 @@ public class NucleoSO implements ComponenteReloj {
         }
         // Un proceso ya escrito en swap no ocupa RAM; uno en plena escritura todavia la ocupa,
         // y uno que se esta leyendo del swap ya tiene su RAM de destino reservada.
-        if (!proceso.isEnSwap() || proceso.reactivacionEnCurso()) ram.liberar(proceso.getMemoria());
-        if (proceso.isEnSwap() || proceso.suspensionEnCurso()) disco.getStorage().releaseSwap(proceso.getId());
+        if (!proceso.isEnSwap() || proceso.reactivacionEnCurso()) {
+            ram.liberar(proceso.getMemoria());
+        }
+        if (proceso.isEnSwap() || proceso.suspensionEnCurso()) {
+            disco.getStorage().releaseSwap(proceso.getId());
+        }
         proceso.terminar(motivo, ciclo);
         colas.agregarTerminado(proceso);
     }
@@ -131,7 +149,9 @@ public class NucleoSO implements ComponenteReloj {
 
     private void enviarSolicitudDisco() {
         PCB proceso = cpu.getProcesoActual();
-        if (proceso == null || !proceso.debeEnviarSolicitudDisco()) return;
+        if (proceso == null || !proceso.debeEnviarSolicitudDisco()) {
+            return;
+        }
         OperacionArchivo operacion = proceso.getOperacionArchivo();
         DiskRequest solicitud = null;
         try {
@@ -141,7 +161,9 @@ public class NucleoSO implements ComponenteReloj {
                 return;
             }
         } catch (IllegalArgumentException e) {
-            if (solicitud != null) finalizarCreacion(solicitud, false);
+            if (solicitud != null) {
+                finalizarCreacion(solicitud, false);
+            }
             cpu.liberar();
             ciclosEnCpu = 0;
             rechazarOperacionArchivo(proceso, e.getMessage());
@@ -156,17 +178,23 @@ public class NucleoSO implements ComponenteReloj {
     }
 
     private DiskRequest prepararSolicitudDisco(PCB proceso, OperacionArchivo operacion) {
-        if (archivos == null) throw new IllegalArgumentException("Falta cargar el sistema de archivos.");
+        if (archivos == null) {
+            throw new IllegalArgumentException("Falta cargar el sistema de archivos.");
+        }
         return switch (operacion.tipo()) {
             case READ -> {
                 var archivo = archivos.archivoParaLectura(operacion.ruta(), operacion.solicitante());
                 int[] bloques = disco.getStorage().getFileChain(archivo.ruta(), archivo.primerBloque());
                 yield new DiskRequest(proceso.getId(), proceso.getNombre(), operacion.tipo(), bloques);
             }
-            case CREATE -> archivos.prepararCreacion(operacion, proceso.getId(), proceso.getNombre(), disco.getStorage());
-            case UPDATE -> archivos.prepararActualizacion(operacion, proceso.getId(), proceso.getNombre());
-            case DELETE -> archivos.prepararEliminacion(operacion, proceso.getId(), proceso.getNombre());
-            default -> throw new IllegalArgumentException(operacion.tipo() + " no es una operación de archivo.");
+            case CREATE ->
+                archivos.prepararCreacion(operacion, proceso.getId(), proceso.getNombre(), disco.getStorage());
+            case UPDATE ->
+                archivos.prepararActualizacion(operacion, proceso.getId(), proceso.getNombre());
+            case DELETE ->
+                archivos.prepararEliminacion(operacion, proceso.getId(), proceso.getNombre());
+            default ->
+                throw new IllegalArgumentException(operacion.tipo() + " no es una operación de archivo.");
         };
     }
 
@@ -187,7 +215,9 @@ public class NucleoSO implements ComponenteReloj {
         registrar("rechaza " + operacion.tipo() + " " + operacion.ruta() + " de " + proceso + ". " + motivo);
     }
 
-    /** Publica los despertares después de planificar para que pasen por Listo. */
+    /**
+     * Publica los despertares después de planificar para que pasen por Listo.
+     */
     private void recibirFinalizacionesDisco() {
         DiskCompletion resultado;
         while ((resultado = disco.pollCompleted()) != null) {
@@ -213,13 +243,17 @@ public class NucleoSO implements ComponenteReloj {
                 }
                 continue;
             }
-            if (suspendido != null) proceso = suspendido;
+            if (suspendido != null) {
+                proceso = suspendido;
+            }
             DiskRequest solicitud = proceso.getSolicitudDisco();
             try {
                 finalizarCreacion(solicitud, true);
             } catch (IllegalArgumentException e) {
                 finalizarCreacion(solicitud, false);
-                if (enTransito) colas.quitarBloqueado(proceso);
+                if (enTransito) {
+                    colas.quitarBloqueado(proceso);
+                }
                 rechazarOperacionArchivo(proceso, e.getMessage());
                 continue;
             }
@@ -245,18 +279,23 @@ public class NucleoSO implements ComponenteReloj {
     }
 
     /**
-     * Termina la escritura al swap: recien ahora se libera la RAM, una sola vez.
-     * Si el evento ocurrio durante la escritura, el proceso queda Listo/Suspendido.
+     * Termina la escritura al swap: recien ahora se libera la RAM, una sola
+     * vez. Si el evento ocurrio durante la escritura, el proceso queda
+     * Listo/Suspendido.
      */
     private void completarSuspension(DiskCompletion resultado) {
         PCB proceso = null;
         for (int i = 0; i < colas.cantidadBloqueados() && proceso == null; i++) {
             PCB candidato = colas.obtenerBloqueado(i);
             DiskRequest escritura = candidato == null ? null : candidato.getSolicitudSwap();
-            if (escritura != null && escritura.getId() == resultado.requestId()) proceso = candidato;
+            if (escritura != null && escritura.getId() == resultado.requestId()) {
+                proceso = candidato;
+            }
         }
         // Si termino antes (por deadline), finalizar ya libero su RAM y su swap.
-        if (proceso == null || !colas.quitarBloqueado(proceso)) return;
+        if (proceso == null || !colas.quitarBloqueado(proceso)) {
+            return;
+        }
         ram.liberar(proceso.getMemoria());
         proceso.completarSuspension();
         if (proceso.isEventoDuranteSuspension()) {
@@ -272,13 +311,17 @@ public class NucleoSO implements ComponenteReloj {
     }
 
     private static PCB buscarEsperandoDisco(DiskCompletion resultado, IntSupplier cantidad,
-                                           IntFunction<PCB> obtener) {
+            IntFunction<PCB> obtener) {
         for (int i = 0; i < cantidad.getAsInt(); i++) {
             PCB proceso = obtener.apply(i);
-            if (proceso == null || proceso.getMotivoBloqueo() != MotivoBloqueo.ESPERA_DISCO) continue;
+            if (proceso == null || proceso.getMotivoBloqueo() != MotivoBloqueo.ESPERA_DISCO) {
+                continue;
+            }
             DiskRequest pendiente = proceso.getSolicitudDisco();
             if (proceso.getId() == resultado.processId() && pendiente != null
-                    && pendiente.getId() == resultado.requestId()) return proceso;
+                    && pendiente.getId() == resultado.requestId()) {
+                return proceso;
+            }
         }
         return null;
     }
@@ -317,7 +360,10 @@ public class NucleoSO implements ComponenteReloj {
         avanzarBloqueadosSuspendidos();
     }
 
-    /** Un suspendido sigue esperando su evento; al cumplirse pasa a Listo/Suspendido, no a Listo. */
+    /**
+     * Un suspendido sigue esperando su evento; al cumplirse pasa a
+     * Listo/Suspendido, no a Listo.
+     */
     private void avanzarBloqueadosSuspendidos() {
         int i = 0;
         PCB suspendido = colas.obtenerBloqueadoSuspendido(i);
@@ -365,8 +411,10 @@ public class NucleoSO implements ComponenteReloj {
                     esperar(p, conteoPropio);
                 }
             }
-            case ESPERAR_MUTEX -> esperar(p, buffer.getMutex());
-            case ACCEDER_BUFFER -> accederBuffer(p, buffer, productor);
+            case ESPERAR_MUTEX ->
+                esperar(p, buffer.getMutex());
+            case ACCEDER_BUFFER ->
+                accederBuffer(p, buffer, productor);
             case LIBERAR_MUTEX -> {
                 senalar(buffer.getMutex());
                 p.setMutexAdquirido(false);
@@ -479,6 +527,40 @@ public class NucleoSO implements ComponenteReloj {
             }
             bloqueado = colas.obtenerBloqueado(j);
         }
+        // Deadlines de procesos listos suspendidos
+        int k = 0;
+        PCB listoSuspendido = colas.obtenerListoSuspendido(k);
+        while (listoSuspendido != null) {
+            if (listoSuspendido.haTerminado()) {
+                colas.quitarListoSuspendido(listoSuspendido);
+                finalizarCompletado(listoSuspendido);
+            } else if (venceDeadline(listoSuspendido)) {
+                colas.quitarListoSuspendido(listoSuspendido);
+                finalizar(listoSuspendido,
+                        MotivoTerminacion.DEADLINE_VENCIDO, cicloGlobal);
+                registrar("vence deadline del proceso "
+                        + listoSuspendido + " en cola de listos suspendidos");
+            } else {
+                k++;
+            }
+            listoSuspendido = colas.obtenerListoSuspendido(k);
+        }
+
+        // Deadlines de procesos bloqueados suspendidos
+        int m = 0;
+        PCB bloqueadoSuspendido = colas.obtenerBloqueadoSuspendido(m);
+        while (bloqueadoSuspendido != null) {
+            if (venceDeadline(bloqueadoSuspendido)) {
+                colas.quitarBloqueadoSuspendido(bloqueadoSuspendido);
+                finalizar(bloqueadoSuspendido,
+                        MotivoTerminacion.DEADLINE_VENCIDO, cicloGlobal);
+                registrar("vence deadline del proceso "
+                        + bloqueadoSuspendido + " en cola de bloqueados suspendidos");
+            } else {
+                m++;
+            }
+            bloqueadoSuspendido = colas.obtenerBloqueadoSuspendido(m);
+        }
     }
 
     private boolean venceDeadline(PCB proceso) {
@@ -498,7 +580,9 @@ public class NucleoSO implements ComponenteReloj {
                 registrar("admite el proceso " + p + " (nuevo -> listo)");
             } else {
                 // Uno que nunca cabe no debe frenar las reactivaciones
-                if (p.getMemoria() <= ram.getTotal()) demanda += p.getMemoria();
+                if (p.getMemoria() <= ram.getTotal()) {
+                    demanda += p.getMemoria();
+                }
                 suspenderPara(p, demanda);
                 i++;
             }
@@ -508,20 +592,28 @@ public class NucleoSO implements ComponenteReloj {
     }
 
     /**
-     * Reactiva Listos/Suspendidos en orden de llegada a esa cola, con la RAM que sobra despues de los Nuevos.
-     * Los Nuevos tienen prioridad porque son los unicos que provocan suspensiones: una reactivacion
-     * solo usa RAM que no necesitan, contando la que ya se esta liberando. Asi una reactivacion nunca
-     * obliga a suspender a otro proceso y no se forman ciclos de suspension y reactivacion.
-     * Bloqueados/Suspendidos no se reactivan: su evento no ha ocurrido.
+     * Reactiva Listos/Suspendidos en orden de llegada a esa cola, con la RAM
+     * que sobra despues de los Nuevos. Los Nuevos tienen prioridad porque son
+     * los unicos que provocan suspensiones: una reactivacion solo usa RAM que
+     * no necesitan, contando la que ya se esta liberando. Asi una reactivacion
+     * nunca obliga a suspender a otro proceso y no se forman ciclos de
+     * suspension y reactivacion. Bloqueados/Suspendidos no se reactivan: su
+     * evento no ha ocurrido.
      */
     private void reactivarSuspendidos(int demandaNuevos) {
         for (int i = 0; i < colas.cantidadListosSuspendidos(); i++) {
             PCB p = colas.obtenerListoSuspendido(i);
-            if (p == null || p.reactivacionEnCurso()) continue;
+            if (p == null || p.reactivacionEnCurso()) {
+                continue;
+            }
             int sobrante = ram.getLibre() + memoriaEscribiendoseAlSwap() - demandaNuevos;
-            if (p.getMemoria() > Math.min(ram.getLibre(), sobrante)) continue;
+            if (p.getMemoria() > Math.min(ram.getLibre(), sobrante)) {
+                continue;
+            }
             int[] bloques = disco.getStorage().getSwapBlocks(p.getId());
-            if (bloques.length == 0 || !ram.reservar(p.getMemoria())) continue;
+            if (bloques.length == 0 || !ram.reservar(p.getMemoria())) {
+                continue;
+            }
             DiskRequest lectura = new DiskRequest(p.getId(), p.getNombre(), DiskOperation.REACTIVATE, bloques);
             if (!disco.addRequest(lectura)) {
                 ram.liberar(p.getMemoria());
@@ -533,16 +625,23 @@ public class NucleoSO implements ComponenteReloj {
         }
     }
 
-    /** Termina la lectura del swap: libera sus bloques y el proceso vuelve a Listo con su contexto intacto. */
+    /**
+     * Termina la lectura del swap: libera sus bloques y el proceso vuelve a
+     * Listo con su contexto intacto.
+     */
     private void completarReactivacion(DiskCompletion resultado) {
         PCB proceso = null;
         for (int i = 0; i < colas.cantidadListosSuspendidos() && proceso == null; i++) {
             PCB candidato = colas.obtenerListoSuspendido(i);
             DiskRequest lectura = candidato == null ? null : candidato.getSolicitudReactivacion();
-            if (lectura != null && lectura.getId() == resultado.requestId()) proceso = candidato;
+            if (lectura != null && lectura.getId() == resultado.requestId()) {
+                proceso = candidato;
+            }
         }
         // Si termino antes (por deadline), finalizar ya libero su RAM reservada y su swap.
-        if (proceso == null || !colas.quitarListoSuspendido(proceso)) return;
+        if (proceso == null || !colas.quitarListoSuspendido(proceso)) {
+            return;
+        }
         disco.getStorage().releaseSwap(proceso.getId());
         proceso.completarReactivacion();
         colas.agregarListo(proceso);
@@ -550,9 +649,10 @@ public class NucleoSO implements ComponenteReloj {
     }
 
     /**
-     * Planificador a mediano plazo. Suspende Bloqueados hasta cubrir la demanda de los Nuevos
-     * que esperan, contando la RAM que ya se esta escribiendo al swap para no suspender de mas.
-     * Cada suspension es una escritura SUSPEND en la misma cola del disco; la RAM se libera al terminarla.
+     * Planificador a mediano plazo. Suspende Bloqueados hasta cubrir la demanda
+     * de los Nuevos que esperan, contando la RAM que ya se esta escribiendo al
+     * swap para no suspender de mas. Cada suspension es una escritura SUSPEND
+     * en la misma cola del disco; la RAM se libera al terminarla.
      */
     private void suspenderPara(PCB nuevo, int demanda) {
         if (nuevo.getMemoria() > ram.getTotal()) {
@@ -586,16 +686,21 @@ public class NucleoSO implements ComponenteReloj {
     }
 
     /**
-     * Victima: el Bloqueado que mas ciclos lleva en su bloqueo actual; en empate, el de menor ID.
-     * Solo esperas de E/S o de disco, que pueden cumplirse con el proceso en swap.
+     * Victima: el Bloqueado que mas ciclos lleva en su bloqueo actual; en
+     * empate, el de menor ID. Solo esperas de E/S o de disco, que pueden
+     * cumplirse con el proceso en swap.
      */
     private PCB elegirVictima() {
         PCB elegida = null;
         for (int i = 0; i < colas.cantidadBloqueados(); i++) {
             PCB p = colas.obtenerBloqueado(i);
-            if (p == null || p.suspensionEnCurso()) continue;
+            if (p == null || p.suspensionEnCurso()) {
+                continue;
+            }
             MotivoBloqueo motivo = p.getMotivoBloqueo();
-            if (motivo != MotivoBloqueo.ESPERA_ES && motivo != MotivoBloqueo.ESPERA_DISCO) continue;
+            if (motivo != MotivoBloqueo.ESPERA_ES && motivo != MotivoBloqueo.ESPERA_DISCO) {
+                continue;
+            }
             if (elegida == null || p.getCiclosBloqueoActual() > elegida.getCiclosBloqueoActual()
                     || p.getCiclosBloqueoActual() == elegida.getCiclosBloqueoActual() && p.getId() < elegida.getId()) {
                 elegida = p;
@@ -608,19 +713,29 @@ public class NucleoSO implements ComponenteReloj {
         int total = 0;
         for (int i = 0; i < colas.cantidadBloqueados(); i++) {
             PCB p = colas.obtenerBloqueado(i);
-            if (p != null && p.suspensionEnCurso()) total += p.getMemoria();
+            if (p != null && p.suspensionEnCurso()) {
+                total += p.getMemoria();
+            }
         }
         return total;
     }
 
-    /** Registra por que un Nuevo sigue esperando, sin repetir el mismo mensaje cada ciclo. */
+    /**
+     * Registra por que un Nuevo sigue esperando, sin repetir el mismo mensaje
+     * cada ciclo.
+     */
     private void avisarAdmision(PCB nuevo, String motivo) {
-        if (motivo.equals(nuevo.getAvisoAdmision())) return;
+        if (motivo.equals(nuevo.getAvisoAdmision())) {
+            return;
+        }
         nuevo.setAvisoAdmision(motivo);
         registrar("no admite " + nuevo + ": " + motivo);
     }
 
-    /** Vence el deadline de los procesos que no han sido admitidos. No liberan RAM porque nunca la reservaron. */
+    /**
+     * Vence el deadline de los procesos que no han sido admitidos. No liberan
+     * RAM porque nunca la reservaron.
+     */
     private void procesarDeadlinesNuevos(long cicloGlobal) {
         int i = 0;
         PCB nuevo = colas.obtenerNuevo(i);
@@ -690,9 +805,23 @@ public class NucleoSO implements ComponenteReloj {
         this.servicio = servicio;
     }
 
-    public EstrategiaPlanificacion getEstrategia() { return estrategia; }
-    public int getIdComputador() { return idComputador; }
-    public CPU getCpu() { return cpu; }
-    public RAM getRam() { return ram; }
-    public ColasSO getColas() { return colas; }
+    public EstrategiaPlanificacion getEstrategia() {
+        return estrategia;
+    }
+
+    public int getIdComputador() {
+        return idComputador;
+    }
+
+    public CPU getCpu() {
+        return cpu;
+    }
+
+    public RAM getRam() {
+        return ram;
+    }
+
+    public ColasSO getColas() {
+        return colas;
+    }
 }

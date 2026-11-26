@@ -74,7 +74,17 @@ public final class DiskRequest {
         progress = new Progress(DiskRequestStatus.COMPLETED, previous.arrival(), previous.start(), result);
         return result;
     }
-
+    void cancel() {
+        Progress previous = progress;
+        if (previous.status() == DiskRequestStatus.QUEUED
+                || previous.status() == DiskRequestStatus.ACTIVE) {
+            progress = new Progress(
+                    DiskRequestStatus.CANCELLED,
+                    previous.arrival(),
+                    previous.start(),
+                    null);
+        }
+    }
     int blockAt(int index) { return blockNumbers[index]; }
     public long getId() { return id; }
     public int getProcessId() { return processId; }
