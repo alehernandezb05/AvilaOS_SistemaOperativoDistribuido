@@ -26,6 +26,9 @@ public class NucleoSO implements ComponenteReloj {
     private volatile Log log;
     private volatile ServicioCluster servicio;
     private volatile long cicloActual = 0;
+    // Solo se cuentan transiciones de swap efectivamente completadas.
+    private volatile long suspensionesCompletadas;
+    private volatile long reactivacionesCompletadas;
 
     public NucleoSO(int idComputador, CPU cpu, RAM ram, EstrategiaPlanificacion estrategia,
             DiskScheduler disco, SistemaArchivos archivos) {
@@ -307,6 +310,7 @@ public class NucleoSO implements ComponenteReloj {
             registrar("escribe " + proceso + " en el swap y libera " + proceso.getMemoria()
                     + " de RAM (bloqueado -> bloqueado/suspendido)");
         }
+        suspensionesCompletadas++;
         admitirNuevos();
     }
 
@@ -645,6 +649,7 @@ public class NucleoSO implements ComponenteReloj {
         disco.getStorage().releaseSwap(proceso.getId());
         proceso.completarReactivacion();
         colas.agregarListo(proceso);
+        reactivacionesCompletadas++;
         registrar("lee " + proceso + " del swap y libera sus bloques (listo/suspendido -> listo)");
     }
 
@@ -820,6 +825,10 @@ public class NucleoSO implements ComponenteReloj {
     public RAM getRam() {
         return ram;
     }
+
+    public long getSuspensionesCompletadas() { return suspensionesCompletadas; }
+
+    public long getReactivacionesCompletadas() { return reactivacionesCompletadas; }
 
     public ColasSO getColas() {
         return colas;
