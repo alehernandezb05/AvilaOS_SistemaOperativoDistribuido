@@ -2,6 +2,7 @@ package edu.unimet.avilaos.hardware;
 
 import edu.unimet.avilaos.estructuras.Cola;
 import java.util.concurrent.Semaphore;
+import java.util.function.Supplier;
 
 /**
  * Reloj global: un hilo que, en cada ciclo, avisa a todos los componentes
@@ -37,7 +38,7 @@ public class Reloj implements Runnable {
     }
 
     public void iniciar() {
-        if (corriendo) {
+        if (corriendo || (hilo != null && hilo.isAlive())) {
             return;
         }
         corriendo = true;
@@ -46,10 +47,33 @@ public class Reloj implements Runnable {
     }
 
     public void detener() {
-        corriendo = false;
-        if (hilo != null) {
-            hilo.interrupt();
+        // No interrumpir una reserva o liberacion a mitad de un ciclo.
+        if (Thread.currentThread() == hilo) {
+            corriendo = false;
+            return;
         }
+        mutex.acquireUninterruptibly();
+        try {
+            corriendo = false;
+            if (hilo != null) hilo.interrupt(); // ya no hay un ciclo en curso
+        } finally {
+            mutex.release();
+        }
+    }
+
+    /** Solo operaciones del modelo; nunca invocar Swing ni esperar al EDT aqui. */
+    public <T> T entreCiclos(Supplier<T> operacion) {
+        if (Thread.currentThread() == hilo) return operacion.get();
+        mutex.acquireUninterruptibly();
+        try { return operacion.get(); }
+        finally { mutex.release(); }
+    }
+
+    /** El refresco puede saltarse un ciclo ocupado, sin bloquear el EDT. */
+    public <T> T intentarObservar(Supplier<T> observacion) {
+        if (!mutex.tryAcquire()) return null;
+        try { return observacion.get(); }
+        finally { mutex.release(); }
     }
 
     /** Espera el fin del ciclo en curso antes de confirmar la pausa. */
@@ -74,6 +98,8 @@ public class Reloj implements Runnable {
             try {
                 Thread.sleep(duracionCicloMs);
             } catch (InterruptedException e) {
+                corriendo = false;
+                Thread.currentThread().interrupt();
                 return;
             }
         }

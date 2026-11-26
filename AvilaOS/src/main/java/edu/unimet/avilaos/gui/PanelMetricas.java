@@ -35,7 +35,7 @@ public class PanelMetricas extends JPanel {
         return scroll;
     }
 
-    public void actualizar() {
+    Runnable capturar() {
         long ciclo = simulador.getCicloActual();
         int cantidad = simulador.getCantidadComputadores();
         PCB[] todos = CalculadorMetricas.procesosDelSistema(simulador);
@@ -45,7 +45,7 @@ public class PanelMetricas extends JPanel {
             filas[i - 1] = fila(CalculadorMetricas.deComputador(simulador.getComputador(i), ciclo));
         }
         filas[cantidad] = fila(CalculadorMetricas.delSistema(simulador, todos, ciclo));
-        modeloRendimiento.setFilas(filas);
+        return () -> modeloRendimiento.setFilas(filas);
 
 
     }

@@ -105,9 +105,15 @@ final class PanelSistemaArchivos extends JPanel {
         seleccionar(seleccion);
     }
 
-    void actualizar() {
-        if (sistema == null) return;
+    Runnable capturar() {
+        if (sistema == null) return () -> {};
         var observacion = sistema.observar(disco.getStorage());
+        var estado = disco.getSnapshot();
+        return () -> mostrar(observacion, estado);
+    }
+
+    private void mostrar(SistemaArchivos.VistaDisco observacion,
+                         edu.unimet.avilaos.hardware.disco.DiskSnapshot estado) {
         Vista actual = observacion.archivos();
         if (vista != actual) {
             String seleccion = rutaSeleccionada();
@@ -133,7 +139,7 @@ final class PanelSistemaArchivos extends JPanel {
             }
             seleccionar(seleccion);
         }
-        mapa.mostrarBloques(observacion.bloques());
+        mapa.mostrar(observacion.bloques(), estado);
     }
 
     /** Tras un UPDATE confirmado, la selección sigue a la entrada renombrada. */

@@ -31,9 +31,14 @@ public class PanelLog extends JPanel {
     }
 
     /** Agrega los eventos registrados desde la ultima llamada. Se llama desde el hilo de Swing. */
-    public void actualizar(Log log) {
+    Runnable capturar(Log log) {
         String[] nuevos = log.obtenerDesde(ultimoLeido);
-        ultimoLeido = log.getTotalRegistrados();
+        long total = log.getTotalRegistrados();
+        return () -> mostrar(nuevos, total);
+    }
+
+    private void mostrar(String[] nuevos, long total) {
+        ultimoLeido = total;
         if (nuevos.length == 0) {
             return;
         }

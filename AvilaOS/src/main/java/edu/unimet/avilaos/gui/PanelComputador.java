@@ -10,7 +10,6 @@ import java.awt.BorderLayout;
 import java.awt.GridLayout;
 import java.util.function.Consumer;
 import java.util.function.IntFunction;
-import java.util.function.IntSupplier;
 import javax.swing.BorderFactory;
 import javax.swing.JComboBox;
 import javax.swing.JLabel;
@@ -51,7 +50,6 @@ public class PanelComputador extends JPanel {
         add(crearPanelEstado(), BorderLayout.NORTH);
         add(crearPestanasColas(), BorderLayout.CENTER);
 
-        actualizar();
     }
 
     /** Solo el administrador cambia la politica de CPU. */
@@ -112,68 +110,51 @@ public class PanelComputador extends JPanel {
         return pestanas;
     }
 
-    /** Lee el estado actual del computador y lo muestra. Se llama desde el hilo de Swing. */
-    public void actualizar() {
+    /** Captura solo valores; la accion devuelta se ejecuta en EDT sin semaforos. */
+    Runnable capturar() {
         CPU cpu = computador.getCpu();
         PCB actual = cpu.getProcesoActual();
-        if (actual == null) {
-            lblProceso.setText("(libre)");
-            lblPc.setText("-");
-            lblPrioridad.setText("-");
-            lblDeadline.setText("-");
-        } else {
-            lblProceso.setText(actual.toString());
-            lblPc.setText(String.valueOf(actual.getProgramCounter()));
-            lblPrioridad.setText(String.valueOf(actual.getPrioridad()));
-            lblDeadline.setText(String.valueOf(actual.getDeadline()));
-        }
-        lblModo.setText(cpu.getModo().toString());
-
+        String nombre = actual == null ? "(libre)" : actual.toString();
+        String pc = actual == null ? "-" : String.valueOf(actual.getProgramCounter());
+        String prioridad = actual == null ? "-" : String.valueOf(actual.getPrioridad());
+        String deadline = actual == null ? "-" : String.valueOf(actual.getDeadline());
+        String modo = cpu.getModo().toString();
         RAM ram = computador.getRam();
-        barraRam.setMaximum(ram.getTotal());
-        barraRam.setValue(ram.getUsada());
-        barraRam.setString(ram.getUsada() + " / " + ram.getTotal() + " usados");
-
-        // Al refrescar el combo no debe avisar, o cada refresco volveria a cambiar la politica
+        int total = ram.getTotal(), usada = ram.getUsada();
         PoliticaPlanificacion politica = computador.getNucleo().getEstrategia().getPolitica();
-        if (comboPolitica.getSelectedItem() != politica) {
-            actualizando = true;
-            comboPolitica.setSelectedItem(politica);
-            actualizando = false;
-        }
-
         ColasSO colas = computador.getNucleo().getColas();
-        actualizarCola(0, colas::cantidadNuevos, colas::obtenerNuevo);
-        actualizarCola(1, colas::cantidadListos, colas::obtenerListo);
-        actualizarCola(2, colas::cantidadBloqueados, colas::obtenerBloqueado);
-        actualizarCola(3, colas::cantidadListosSuspendidos, colas::obtenerListoSuspendido);
-        actualizarCola(4, colas::cantidadBloqueadosSuspendidos, colas::obtenerBloqueadoSuspendido);
-        actualizarCola(5, colas::cantidadTerminados, colas::obtenerTerminado);
-    }
-
-    /** Copia la cola a un arreglo y pone la cantidad en el titulo de la pestana. */
-    private void actualizarCola(int indice, IntSupplier cantidad, IntFunction<PCB> obtener) {
-        PCB[] copia = copiarCola(cantidad.getAsInt(), obtener);
-        modelos[indice].setProcesos(copia);
-        pestanas.setTitleAt(indice, NOMBRES_COLAS[indice] + " (" + copia.length + ")");
-    }
-
-    // El reloj puede cambiar la cola mientras se copia: si un indice ya no existe, se corta ahi
-    private static PCB[] copiarCola(int cantidad, IntFunction<PCB> obtener) {
-        PCB[] temporal = new PCB[cantidad];
-        int n = 0;
-        while (n < cantidad) {
-            PCB p = obtener.apply(n);
-            if (p == null) {
-                break;
+        Object[][][] filas = {
+            copiarCola(colas.cantidadNuevos(), colas::obtenerNuevo),
+            copiarCola(colas.cantidadListos(), colas::obtenerListo),
+            copiarCola(colas.cantidadBloqueados(), colas::obtenerBloqueado),
+            copiarCola(colas.cantidadListosSuspendidos(), colas::obtenerListoSuspendido),
+            copiarCola(colas.cantidadBloqueadosSuspendidos(), colas::obtenerBloqueadoSuspendido),
+            copiarCola(colas.cantidadTerminados(), colas::obtenerTerminado)
+        };
+        return () -> {
+            lblProceso.setText(nombre);
+            lblPc.setText(pc);
+            lblPrioridad.setText(prioridad);
+            lblDeadline.setText(deadline);
+            lblModo.setText(modo);
+            barraRam.setMaximum(total);
+            barraRam.setValue(usada);
+            barraRam.setString(usada + " / " + total + " usados");
+            actualizando = true;
+            try {
+                if (comboPolitica.getSelectedItem() != politica && !comboPolitica.isPopupVisible())
+                    comboPolitica.setSelectedItem(politica);
+            } finally { actualizando = false; }
+            for (int i = 0; i < filas.length; i++) {
+                modelos[i].setFilas(filas[i]);
+                pestanas.setTitleAt(i, NOMBRES_COLAS[i] + " (" + filas[i].length + ")");
             }
-            temporal[n++] = p;
-        }
-        if (n == cantidad) {
-            return temporal;
-        }
-        PCB[] recortado = new PCB[n];
-        System.arraycopy(temporal, 0, recortado, 0, n);
-        return recortado;
+        };
+    }
+
+    private static Object[][] copiarCola(int cantidad, IntFunction<PCB> obtener) {
+        PCB[] temporal = new PCB[cantidad];
+        for (int i = 0; i < cantidad; i++) temporal[i] = obtener.apply(i);
+        return ModeloTablaPCB.copiar(temporal);
     }
 }

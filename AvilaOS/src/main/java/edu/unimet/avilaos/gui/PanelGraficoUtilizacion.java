@@ -71,23 +71,27 @@ public class PanelGraficoUtilizacion extends JPanel {
      * La utilizacion es la del intervalo: ciclos ocupados / ciclos transcurridos
      * desde la muestra anterior, para que se vean los cambios en el tiempo.
      */
-    public void actualizar() {
+    Runnable capturar() {
         long ciclo = simulador.getCicloActual();
-        if (ciclo <= ultimoCiclo) {
-            return;
-        }
-        ultimoCiclo = ciclo;
+        long[] ocupadas = new long[series.length];
+        long[] totales = new long[series.length];
         for (int i = 0; i < series.length; i++) {
             CPU cpu = simulador.getComputador(i + 1).getCpu();
-            long ocupada = cpu.getCiclosOcupada();
-            long totales = cpu.getCiclosTotales();
-            long transcurridos = totales - totalesAnterior[i];
-            if (transcurridos > 0) {
-                double porcentaje = 100.0 * (ocupada - ocupadaAnterior[i]) / transcurridos;
-                series[i].add(ciclo, porcentaje);
-            }
-            ocupadaAnterior[i] = ocupada;
-            totalesAnterior[i] = totales;
+            ocupadas[i] = cpu.getCiclosOcupada();
+            totales[i] = cpu.getCiclosTotales();
         }
+        return () -> {
+            if (ciclo <= ultimoCiclo) return;
+            ultimoCiclo = ciclo;
+            for (int i = 0; i < series.length; i++) {
+                long transcurridos = totales[i] - totalesAnterior[i];
+                if (transcurridos > 0) {
+                    double porcentaje = 100.0 * (ocupadas[i] - ocupadaAnterior[i]) / transcurridos;
+                    series[i].add(ciclo, porcentaje);
+                }
+                ocupadaAnterior[i] = ocupadas[i];
+                totalesAnterior[i] = totales[i];
+            }
+        };
     }
 }

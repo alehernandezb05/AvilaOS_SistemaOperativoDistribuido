@@ -15,17 +15,29 @@ public class ModeloTablaPCB extends AbstractTableModel {
         "Operación", "Ruta"
     };
 
-    private PCB[] procesos = new PCB[0];
+    private Object[][] filas = new Object[0][];
 
     /** Reemplaza las filas y avisa a la tabla para que se repinte. */
     public void setProcesos(PCB[] procesos) {
-        this.procesos = procesos;
+        setFilas(copiar(procesos));
+    }
+
+    static Object[][] copiar(PCB[] procesos) {
+        Object[][] copia = new Object[procesos.length][COLUMNAS.length];
+        for (int i = 0; i < procesos.length; i++) {
+            for (int j = 0; j < COLUMNAS.length; j++) copia[i][j] = valor(procesos[i], j);
+        }
+        return copia;
+    }
+
+    void setFilas(Object[][] nuevas) {
+        filas = nuevas;
         fireTableDataChanged();
     }
 
     @Override
     public int getRowCount() {
-        return procesos.length;
+        return filas.length;
     }
 
     @Override
@@ -40,7 +52,10 @@ public class ModeloTablaPCB extends AbstractTableModel {
 
     @Override
     public Object getValueAt(int fila, int columna) {
-        PCB p = procesos[fila];
+        return filas[fila][columna];
+    }
+
+    private static Object valor(PCB p, int columna) {
         return switch (columna) {
             case 0 -> "P" + p.getId();
             case 1 -> p.getNombre();

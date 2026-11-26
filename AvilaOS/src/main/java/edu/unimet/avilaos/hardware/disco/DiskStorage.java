@@ -96,6 +96,16 @@ public final class DiskStorage {
         }
     }
 
+    /** Cantidad de bloques reservados por CREATE aun no confirmado. */
+    public int getReservedFileBlockCount() {
+        mutex.acquireUninterruptibly();
+        try {
+            int cantidad = 0;
+            for (FileReservation reserva : fileReservations) if (reserva != null) cantidad++;
+            return cantidad;
+        } finally { mutex.release(); }
+    }
+
     /** Reserva posiciones para la E/S sin publicarlas en el mapa de archivos. */
     public FileReservation reserveFile(String filePath, int count) {
         validatePath(filePath);
