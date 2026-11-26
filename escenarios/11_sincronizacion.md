@@ -1,0 +1,15 @@
+# Sincronización y observación coherente (Issue #93)
+
+## Orden de adquisición
+
+- El reloj global mantiene su semáforo durante un ciclo completo: disco, núcleo y CPU, en ese orden. Las operaciones de la GUI sobre el modelo (alta de proceso, políticas, quantum, velocidad, configuración y copia del sistema de archivos) se serializan en esa frontera.
+- Desde la frontera del reloj se adquieren los semáforos internos de las colas, RAM, disco, árbol de archivos y log. Cada módulo libera su semáforo en `finally`. Las operaciones del árbol que necesitan el almacenamiento adquieren primero el árbol y luego `DiskStorage`; el almacenamiento no llama al árbol. La cola del disco se protege con su propio semáforo. La finalización del disco se consume por el núcleo después de que el planificador del disco liberó su semáforo.
+- El refresco Swing usa `intentarObservar`: si el reloj está ocupado, conserva la última imagen completa y vuelve a intentar en el próximo refresco. Copia valores de PCB, métricas, CPU, RAM, cola, bloques, historial, árbol y log en una sola frontera. Los paneles aplican esas copias en el EDT **después** de liberar el semáforo del reloj. No se ejecuta `invokeAndWait`, diálogo ni escritura de archivos bajo el semáforo. Las órdenes breves pueden esperar al fin del ciclo, pero el reloj nunca espera al EDT. Las funciones internas de observación no deben invocar otra función que vuelva a adquirir el reloj.
+- Las vistas del árbol publicadas no se modifican; las cadenas y arreglos de bloques/entradas se copian. Los getters de PCB y solicitudes destinados al núcleo y pruebas conservan identidad; no son API de edición para la GUI. Los modelos Swing no guardan PCB vivos. El guardado obtiene una copia del estado confirmado, luego escribe fuera de la frontera.
+- Detener espera que termine el ciclo en curso antes de interrumpir el hilo. Pausar confirma una frontera completa; el refresco no avanza el reloj. No se cambia el modelo de concurrencia ni se incorporan nuevas bibliotecas.
+
+## Validación
+
+Ejecutar `PruebaSincronizacion.java` (Run File en NetBeans). Comprueba interrupción del solicitante de pausa, rechazo de captura a mitad de ciclo, CRUD con reloj activo, cambios de política, copias de configuración y sistema de archivos, valores de tabla que no cambian sin refresco, exclusión CPU/colas, RAM residente, swap, cadenas sin duplicados y reservas de CREATE. Ejecutar además `PruebaDisco`, `PruebaDeadlines`, `PruebaMetricasDisco` y `PruebaMetricasSuspension`.
+
+Demostración manual: cargar `10_metricas_suspension.json` y `08_sistema_archivos.json`; iniciar, alternar pestañas, pausar/reanudar, cambiar política de disco y verificar contadores. En modo administrador crear, leer, renombrar y eliminar un archivo pequeño con el reloj activo; esperar confirmación antes de la siguiente operación. Guardar el sistema de archivos en un JSON nuevo y comprobar que se puede volver a cargar. Capturar la interfaz con las métricas y el log. La prueba automatizada no sustituye esta verificación visual.

@@ -65,7 +65,7 @@ public class VentanaPrincipal extends JFrame {
                 simulador.cambiarPolitica(1, p);
             } catch (IllegalArgumentException e) {
                 error(e.getMessage());
-                panelComputador.actualizar();
+                actualizar();
             }
         });
 
@@ -92,7 +92,7 @@ public class VentanaPrincipal extends JFrame {
             } catch (IllegalArgumentException e) {
                 error(e.getMessage());
             }
-            panelDisco.actualizar();
+            actualizar();
         });
         panelDisco.alCambiarVelocidad(v -> {
             try {
@@ -100,7 +100,7 @@ public class VentanaPrincipal extends JFrame {
             } catch (IllegalArgumentException e) {
                 error(e.getMessage());
             }
-            panelDisco.actualizar();
+            actualizar();
         });
         JTabbedPane vistas = new JTabbedPane();
         vistas.addTab("Computador", scrollComputadores);
@@ -117,6 +117,7 @@ public class VentanaPrincipal extends JFrame {
         aplicarSesion();
         // javax.swing.Timer corre en el hilo de Swing, asi que puede tocar los componentes
         refresco = new Timer(REFRESCO_MS, e -> actualizar());
+        actualizar();
         refresco.start();
     }
 
@@ -182,7 +183,7 @@ public class VentanaPrincipal extends JFrame {
         if ((simulador.getCicloActual() == 0 && !simulador.estaCorriendo()) || JOptionPane.showConfirmDialog(this,
                 "Cargar la configuracion reinicia la simulacion y se pierde el estado actual. Continuar?",
                 "Cargar configuracion", JOptionPane.YES_NO_OPTION) == JOptionPane.YES_OPTION) {
-            reiniciarCon(config, simulador.getSistemaArchivos());
+            reiniciarCon(config, simulador.copiaSistemaArchivos());
         }
     }
 
@@ -198,7 +199,7 @@ public class VentanaPrincipal extends JFrame {
             return;
         }
         try {
-            ArchivoSistemaArchivos.guardar(sistema, archivo);
+            ArchivoSistemaArchivos.guardar(simulador.copiaSistemaArchivos(), archivo);
             simulador.getLog().registrar(simulador.getCicloActual(), "Se guarda el sistema de archivos en " + archivo);
             JOptionPane.showMessageDialog(this, "Sistema de archivos guardado en " + archivo,
                     "Guardar sistema de archivos", JOptionPane.INFORMATION_MESSAGE);
@@ -252,14 +253,29 @@ public class VentanaPrincipal extends JFrame {
 
     /** Lee el estado del simulador y repinta los paneles. */
     private void actualizar() {
-        panelControles.setCiclo(simulador.getCicloActual());
-        panelControles.setCorriendo(simulador.estaCorriendo(), simulador.impedimentoInicio());
-        panelComputador.actualizar();
-        panelGrafico.actualizar();
-        panelLog.actualizar(simulador.getLog());
-        panelMetricas.actualizar();
-        panelArchivos.actualizar();
-        panelDisco.actualizar();
+        // Una sola frontera de ciclo para todos los paneles. Ningun repintado bajo el mutex.
+        Runnable vista = simulador.intentarObservar(() -> {
+            long ciclo = simulador.getCicloActual();
+            boolean corriendo = simulador.estaCorriendo();
+            String impedimento = simulador.impedimentoInicio();
+            Runnable computador = panelComputador.capturar();
+            Runnable grafico = panelGrafico.capturar();
+            Runnable log = panelLog.capturar(simulador.getLog());
+            Runnable metricas = panelMetricas.capturar();
+            Runnable archivos = panelArchivos.capturar();
+            Runnable disco = panelDisco.capturar();
+            return () -> {
+                panelControles.setCiclo(ciclo);
+                panelControles.setCorriendo(corriendo, impedimento);
+                computador.run();
+                grafico.run();
+                log.run();
+                metricas.run();
+                archivos.run();
+                disco.run();
+            };
+        });
+        if (vista != null) vista.run();
     }
 
     /** Abre el dialogo de crear proceso y lo envia al simulador. */

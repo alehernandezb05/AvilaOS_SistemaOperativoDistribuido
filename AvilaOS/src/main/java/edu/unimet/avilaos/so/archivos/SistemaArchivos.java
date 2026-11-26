@@ -8,6 +8,7 @@ import edu.unimet.avilaos.hardware.disco.DiskStorage.FileReservation;
 import edu.unimet.avilaos.hardware.disco.DiskStorage.InitialFile;
 import edu.unimet.avilaos.hardware.disco.enums.DiskOperation;
 import java.util.Arrays;
+import java.util.concurrent.Semaphore;
 
 /** Jerarquía del sistema de archivos, independiente de Swing. */
 public final class SistemaArchivos {
@@ -167,10 +168,14 @@ public final class SistemaArchivos {
     private record Creacion(long solicitud, Entrada entrada, FileReservation reserva) { }
     /** UPDATE o DELETE confirmado solo cuando el disco termina su solicitud. */
     private record Cambio(long solicitud, DiskOperation tipo, String ruta, String destino) { }
-    public record VistaDisco(Vista archivos, DiskBlock[] bloques) { }
+    public record VistaDisco(Vista archivos, DiskBlock[] bloques) {
+        public VistaDisco { bloques = bloques.clone(); }
+        @Override public DiskBlock[] bloques() { return bloques.clone(); }
+    }
 
     private final int bloquesDisco;
     private final int cabezalInicial;
+    private final Semaphore mutex = new Semaphore(1);
     private final Lista<Creacion> pendientes = new Lista<>();
     private final Lista<Cambio> cambios = new Lista<>();
     private volatile Vista vista;
@@ -188,42 +193,47 @@ public final class SistemaArchivos {
     /** Incorpora las entradas confirmadas al iniciar otra simulación. */
     public SistemaArchivos copia() { return new SistemaArchivos(bloquesDisco, cabezalInicial, vista); }
 
-    public synchronized DiskRequest prepararCreacion(OperacionArchivo operacion, int procesoId, String proceso,
+    public DiskRequest prepararCreacion(OperacionArchivo operacion, int procesoId, String proceso,
                                                       DiskStorage disco) {
-        if (operacion.tipo() != DiskOperation.CREATE) throw new IllegalArgumentException("Se esperaba CREATE.");
-        String ruta = operacion.ruta();
-        if (buscar(ruta) != null) throw new IllegalArgumentException("La ruta ya existe: " + ruta);
-        Nodo padre = buscar(rutaPadre(ruta));
-        if (padre == null || padre.entrada.tipo() != Tipo.DIRECTORY) {
-            throw new IllegalArgumentException("El directorio destino no existe: " + rutaPadre(ruta));
-        }
-        for (int i = 0; i < pendientes.getTamano(); i++) {
-            if (pendientes.obtener(i).entrada.ruta().equals(ruta)) {
-                throw new IllegalArgumentException("Ya hay una creación pendiente para " + ruta + ".");
-            }
-        }
-        for (int i = 0; i < cambios.getTamano(); i++) {
-            Cambio cambio = cambios.obtener(i);
-            if (contiene(cambio.ruta, ruta) || (cambio.destino != null && contiene(cambio.destino, ruta))) {
-                throw new IllegalArgumentException("No se puede crear " + ruta + ": hay un " + cambio.tipo
-                        + " pendiente sobre " + cambio.ruta + ".");
-            }
-        }
-        String solicitante = operacion.solicitante();
-        boolean directorio = operacion.bloques() == 0;
-        validarPermisoCreacion(solicitante, directorio, padre.entrada);
-        FileReservation reserva = directorio ? null : disco.reserveFile(ruta, operacion.bloques());
+        mutex.acquireUninterruptibly();
         try {
-            int[] cadena = directorio ? new int[0] : reserva.blockNumbers();
-            DiskRequest solicitud = directorio ? DiskRequest.metadata(procesoId, proceso, DiskOperation.CREATE)
-                    : new DiskRequest(procesoId, proceso, DiskOperation.CREATE, cadena);
-            Entrada entrada = new Entrada(ruta, directorio ? Tipo.DIRECTORY : Tipo.FILE,
-                    solicitante, Permiso.PRIVATE, cadena, procesoId);
-            pendientes.agregar(new Creacion(solicitud.getId(), entrada, reserva));
-            return solicitud;
-        } catch (IllegalArgumentException e) {
-            if (reserva != null) disco.finishFileReservation(reserva, false);
-            throw e;
+            if (operacion.tipo() != DiskOperation.CREATE) throw new IllegalArgumentException("Se esperaba CREATE.");
+            String ruta = operacion.ruta();
+            if (buscar(ruta) != null) throw new IllegalArgumentException("La ruta ya existe: " + ruta);
+            Nodo padre = buscar(rutaPadre(ruta));
+            if (padre == null || padre.entrada.tipo() != Tipo.DIRECTORY) {
+                throw new IllegalArgumentException("El directorio destino no existe: " + rutaPadre(ruta));
+            }
+            for (int i = 0; i < pendientes.getTamano(); i++) {
+                if (pendientes.obtener(i).entrada.ruta().equals(ruta)) {
+                    throw new IllegalArgumentException("Ya hay una creación pendiente para " + ruta + ".");
+                }
+            }
+            for (int i = 0; i < cambios.getTamano(); i++) {
+                Cambio cambio = cambios.obtener(i);
+                if (contiene(cambio.ruta, ruta) || (cambio.destino != null && contiene(cambio.destino, ruta))) {
+                    throw new IllegalArgumentException("No se puede crear " + ruta + ": hay un " + cambio.tipo
+                            + " pendiente sobre " + cambio.ruta + ".");
+                }
+            }
+            String solicitante = operacion.solicitante();
+            boolean directorio = operacion.bloques() == 0;
+            validarPermisoCreacion(solicitante, directorio, padre.entrada);
+            FileReservation reserva = directorio ? null : disco.reserveFile(ruta, operacion.bloques());
+            try {
+                int[] cadena = directorio ? new int[0] : reserva.blockNumbers();
+                DiskRequest solicitud = directorio ? DiskRequest.metadata(procesoId, proceso, DiskOperation.CREATE)
+                        : new DiskRequest(procesoId, proceso, DiskOperation.CREATE, cadena);
+                Entrada entrada = new Entrada(ruta, directorio ? Tipo.DIRECTORY : Tipo.FILE,
+                        solicitante, Permiso.PRIVATE, cadena, procesoId);
+                pendientes.agregar(new Creacion(solicitud.getId(), entrada, reserva));
+                return solicitud;
+            } catch (IllegalArgumentException e) {
+                if (reserva != null) disco.finishFileReservation(reserva, false);
+                throw e;
+            }
+        } finally {
+            mutex.release();
         }
     }
 
@@ -231,28 +241,33 @@ public final class SistemaArchivos {
      * Revisa solo los permisos de una operacion, sin reservar nada. La interfaz la usa antes de crear
      * el proceso; al ejecutarse, las mismas reglas se vuelven a aplicar con el estado de ese momento.
      */
-    public synchronized void comprobarPermiso(OperacionArchivo operacion) {
-        String solicitante = operacion.solicitante();
-        switch (operacion.tipo()) {
-            case READ -> archivoParaLectura(operacion.ruta(), solicitante);
-            case CREATE -> {
-                Nodo padre = buscar(rutaPadre(operacion.ruta()));
-                if (padre == null || padre.entrada.tipo() != Tipo.DIRECTORY) {
-                    throw new IllegalArgumentException("El directorio destino no existe: " + rutaPadre(operacion.ruta()));
+    public void comprobarPermiso(OperacionArchivo operacion) {
+        mutex.acquireUninterruptibly();
+        try {
+            String solicitante = operacion.solicitante();
+            switch (operacion.tipo()) {
+                case READ -> archivoParaLectura(operacion.ruta(), solicitante);
+                case CREATE -> {
+                    Nodo padre = buscar(rutaPadre(operacion.ruta()));
+                    if (padre == null || padre.entrada.tipo() != Tipo.DIRECTORY) {
+                        throw new IllegalArgumentException("El directorio destino no existe: " + rutaPadre(operacion.ruta()));
+                    }
+                    validarPermisoCreacion(solicitante, operacion.bloques() == 0, padre.entrada);
                 }
-                validarPermisoCreacion(solicitante, operacion.bloques() == 0, padre.entrada);
-            }
-            case UPDATE -> {
-                if (!ADMINISTRADOR.equals(solicitante)) {
-                    throw new IllegalArgumentException("UPDATE denegado: renombrar requiere administrador.");
+                case UPDATE -> {
+                    if (!ADMINISTRADOR.equals(solicitante)) {
+                        throw new IllegalArgumentException("UPDATE denegado: renombrar requiere administrador.");
+                    }
                 }
+                case DELETE -> {
+                    Nodo nodo = buscar(operacion.ruta());
+                    if (nodo == null) throw new IllegalArgumentException("No existe " + operacion.ruta() + ".");
+                    validarPermisoEliminacion(solicitante, nodo.entrada);
+                }
+                default -> throw new IllegalArgumentException(operacion.tipo() + " no es una operación de archivo.");
             }
-            case DELETE -> {
-                Nodo nodo = buscar(operacion.ruta());
-                if (nodo == null) throw new IllegalArgumentException("No existe " + operacion.ruta() + ".");
-                validarPermisoEliminacion(solicitante, nodo.entrada);
-            }
-            default -> throw new IllegalArgumentException(operacion.tipo() + " no es una operación de archivo.");
+        } finally {
+            mutex.release();
         }
     }
 
@@ -265,45 +280,55 @@ public final class SistemaArchivos {
     }
 
     /** Renombrar es trabajo de metadatos: un ciclo de disco, sin mover los bloques del archivo. */
-    public synchronized DiskRequest prepararActualizacion(OperacionArchivo operacion, int procesoId, String proceso) {
-        if (operacion.tipo() != DiskOperation.UPDATE) throw new IllegalArgumentException("Se esperaba UPDATE.");
-        String nuevoNombre = operacion.nuevoNombre();
-        if (nuevoNombre == null) {
-            throw new IllegalArgumentException("UPDATE requiere newName: falta el nombre destino.");
+    public DiskRequest prepararActualizacion(OperacionArchivo operacion, int procesoId, String proceso) {
+        mutex.acquireUninterruptibly();
+        try {
+            if (operacion.tipo() != DiskOperation.UPDATE) throw new IllegalArgumentException("Se esperaba UPDATE.");
+            String nuevoNombre = operacion.nuevoNombre();
+            if (nuevoNombre == null) {
+                throw new IllegalArgumentException("UPDATE requiere newName: falta el nombre destino.");
+            }
+            String ruta = operacion.ruta();
+            if (ruta.equals("/")) throw new IllegalArgumentException("No se puede renombrar el directorio raíz.");
+            Nodo nodo = buscar(ruta);
+            if (nodo == null) throw new IllegalArgumentException("No existe " + ruta + ": fue eliminado o nunca existió.");
+            if (!ADMINISTRADOR.equals(operacion.solicitante())) {
+                throw new IllegalArgumentException("UPDATE denegado: renombrar requiere administrador.");
+            }
+            if (nuevoNombre.equals(nodo.entrada.nombre())) {
+                throw new IllegalArgumentException("El nombre destino es igual al actual: " + nuevoNombre + ".");
+            }
+            String destino = rutaHija(rutaPadre(ruta), nuevoNombre);
+            if (buscar(destino) != null) throw new IllegalArgumentException("Ya existe " + destino + ".");
+            validarSinConflicto(ruta, destino);
+            DiskRequest solicitud = DiskRequest.metadata(procesoId, proceso, DiskOperation.UPDATE);
+            cambios.agregar(new Cambio(solicitud.getId(), DiskOperation.UPDATE, ruta, destino));
+            return solicitud;
+        } finally {
+            mutex.release();
         }
-        String ruta = operacion.ruta();
-        if (ruta.equals("/")) throw new IllegalArgumentException("No se puede renombrar el directorio raíz.");
-        Nodo nodo = buscar(ruta);
-        if (nodo == null) throw new IllegalArgumentException("No existe " + ruta + ": fue eliminado o nunca existió.");
-        if (!ADMINISTRADOR.equals(operacion.solicitante())) {
-            throw new IllegalArgumentException("UPDATE denegado: renombrar requiere administrador.");
-        }
-        if (nuevoNombre.equals(nodo.entrada.nombre())) {
-            throw new IllegalArgumentException("El nombre destino es igual al actual: " + nuevoNombre + ".");
-        }
-        String destino = rutaHija(rutaPadre(ruta), nuevoNombre);
-        if (buscar(destino) != null) throw new IllegalArgumentException("Ya existe " + destino + ".");
-        validarSinConflicto(ruta, destino);
-        DiskRequest solicitud = DiskRequest.metadata(procesoId, proceso, DiskOperation.UPDATE);
-        cambios.agregar(new Cambio(solicitud.getId(), DiskOperation.UPDATE, ruta, destino));
-        return solicitud;
     }
 
     /** El disco recorre los bloques de cada archivo eliminado; sin bloques es trabajo de metadatos. */
-    public synchronized DiskRequest prepararEliminacion(OperacionArchivo operacion, int procesoId, String proceso) {
-        if (operacion.tipo() != DiskOperation.DELETE) throw new IllegalArgumentException("Se esperaba DELETE.");
-        String ruta = operacion.ruta();
-        if (ruta.equals("/")) throw new IllegalArgumentException("No se puede eliminar el directorio raíz.");
-        Nodo nodo = buscar(ruta);
-        if (nodo == null) throw new IllegalArgumentException("No existe " + ruta + ": fue eliminado o nunca existió.");
-        validarPermisoEliminacion(operacion.solicitante(), nodo.entrada);
-        validarSinConflicto(ruta, null);
-        int[] bloques = new int[contarBloques(nodo)];
-        copiarBloques(nodo, bloques, 0);
-        DiskRequest solicitud = bloques.length == 0 ? DiskRequest.metadata(procesoId, proceso, DiskOperation.DELETE)
-                : new DiskRequest(procesoId, proceso, DiskOperation.DELETE, bloques);
-        cambios.agregar(new Cambio(solicitud.getId(), DiskOperation.DELETE, ruta, null));
-        return solicitud;
+    public DiskRequest prepararEliminacion(OperacionArchivo operacion, int procesoId, String proceso) {
+        mutex.acquireUninterruptibly();
+        try {
+            if (operacion.tipo() != DiskOperation.DELETE) throw new IllegalArgumentException("Se esperaba DELETE.");
+            String ruta = operacion.ruta();
+            if (ruta.equals("/")) throw new IllegalArgumentException("No se puede eliminar el directorio raíz.");
+            Nodo nodo = buscar(ruta);
+            if (nodo == null) throw new IllegalArgumentException("No existe " + ruta + ": fue eliminado o nunca existió.");
+            validarPermisoEliminacion(operacion.solicitante(), nodo.entrada);
+            validarSinConflicto(ruta, null);
+            int[] bloques = new int[contarBloques(nodo)];
+            copiarBloques(nodo, bloques, 0);
+            DiskRequest solicitud = bloques.length == 0 ? DiskRequest.metadata(procesoId, proceso, DiskOperation.DELETE)
+                    : new DiskRequest(procesoId, proceso, DiskOperation.DELETE, bloques);
+            cambios.agregar(new Cambio(solicitud.getId(), DiskOperation.DELETE, ruta, null));
+            return solicitud;
+        } finally {
+            mutex.release();
+        }
     }
 
     private static void validarPermisoEliminacion(String solicitante, Entrada entrada) {
@@ -353,15 +378,20 @@ public final class SistemaArchivos {
      * Confirma o cancela una operación pendiente (CREATE, UPDATE o DELETE) cuando el disco termina su solicitud
      * o cuando el proceso muere antes. Cancelar siempre libera la reserva sin publicar nada.
      */
-    public synchronized void finalizarOperacion(long solicitudId, boolean confirmar, DiskStorage disco) {
-        for (int i = 0; i < cambios.getTamano(); i++) {
-            Cambio cambio = cambios.obtener(i);
-            if (cambio.solicitud != solicitudId) continue;
-            cambios.remover(cambio);
-            if (confirmar) aplicar(cambio, disco);
-            return;
+    public void finalizarOperacion(long solicitudId, boolean confirmar, DiskStorage disco) {
+        mutex.acquireUninterruptibly();
+        try {
+            for (int i = 0; i < cambios.getTamano(); i++) {
+                Cambio cambio = cambios.obtener(i);
+                if (cambio.solicitud != solicitudId) continue;
+                cambios.remover(cambio);
+                if (confirmar) aplicar(cambio, disco);
+                return;
+            }
+            finalizarCreacionInterna(solicitudId, confirmar, disco);
+        } finally {
+            mutex.release();
         }
-        finalizarCreacion(solicitudId, confirmar, disco);
     }
 
     private void aplicar(Cambio cambio, DiskStorage disco) {
@@ -398,7 +428,13 @@ public final class SistemaArchivos {
         vista = siguiente;
     }
 
-    public synchronized void finalizarCreacion(long solicitudId, boolean confirmar, DiskStorage disco) {
+    public void finalizarCreacion(long solicitudId, boolean confirmar, DiskStorage disco) {
+        mutex.acquireUninterruptibly();
+        try { finalizarCreacionInterna(solicitudId, confirmar, disco); }
+        finally { mutex.release(); }
+    }
+
+    private void finalizarCreacionInterna(long solicitudId, boolean confirmar, DiskStorage disco) {
         for (int i = 0; i < pendientes.getTamano(); i++) {
             Creacion creacion = pendientes.obtener(i);
             if (creacion.solicitud != solicitudId) continue;
@@ -417,8 +453,13 @@ public final class SistemaArchivos {
     }
 
     public Vista vista() { return vista; }
-    public synchronized VistaDisco observar(DiskStorage disco) {
-        return new VistaDisco(vista, disco.getBlocks());
+    public VistaDisco observar(DiskStorage disco) {
+        mutex.acquireUninterruptibly();
+        try {
+            return new VistaDisco(vista, disco.getBlocks());
+        } finally {
+            mutex.release();
+        }
     }
     public Nodo buscar(String ruta) { return vista.buscar(ruta); }
     public Nodo raiz() { return vista.raiz(); }

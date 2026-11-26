@@ -92,7 +92,6 @@ add(vistaCompleta, BorderLayout.CENTER);
 SwingUtilities.invokeLater(
         () -> vistaCompleta.setDividerLocation(0.6));
 SwingUtilities.invokeLater(() -> contenido.setDividerLocation(0.6));
-        actualizar();
     }
 
     /** Avisa cuando el usuario elige otra politica de disco. */
@@ -116,56 +115,47 @@ SwingUtilities.invokeLater(() -> contenido.setDividerLocation(0.6));
     }
 
     /** Lee estado y cola en una sola copia y repinta. Se llama desde el hilo de Swing. */
-    void actualizar() {
+    Runnable capturar() {
         DiskQueueView vista = disco.getQueueView();
         DiskSnapshot estado = vista.state();
-        sincronizando = true;
-        try {
-            if (comboPolitica.getSelectedItem() != estado.policy() && !comboPolitica.isPopupVisible()) {
-                comboPolitica.setSelectedItem(estado.policy());
-            }
-            if (!spnVelocidad.getValue().equals(estado.speed()) && !spnVelocidad.hasFocus()) {
-                spnVelocidad.setValue(estado.speed());
-            }
-        } finally {
-            sincronizando = false;
-        }
-        lblEstado.setText("   Cabezal: " + estado.currentHead() + " [" + estado.direction() + "]"
-                + "   Desplazamiento: " + estado.totalHeadMovement()
-                + "   Atendidas: " + estado.totalRequestsServed()
-                + "   En cola: " + estado.pendingCount());
+        var bloques = disco.getBlocks();
+        DiskScheduler.MovementSample[] nuevasMuestras = disco.getMovementHistory(muestrasGraficadas);
         StringBuilder metricas = new StringBuilder("<html>");
-
-metricas.append(String.format(
-        "Espera promedio: %.2f ciclos | Retorno C-SCAN: %d ciclos",
-        disco.getAverageWaitCycles(),
-        disco.getTotalReturnCycles()));
-
-metricas.append("<br>");
-
-for (DiskPolicy politica : DiskPolicy.values()) {
-    metricas.append(String.format(
-            "%s: %d atendidas (%.2f ciclos) &nbsp; | &nbsp; ",
-            politica,
-            disco.getServedCount(politica),
-            disco.getAverageWaitCycles(politica)));
-}
-
-metricas.append("</html>");
-lblMetricas.setText(metricas.toString());
-        cola.mostrar(vista.entries());
-        mapa.mostrar(disco.getBlocks(), estado);
-        DiskScheduler.MovementSample[] nuevasMuestras =
-        disco.getMovementHistory(muestrasGraficadas);
-
-for (DiskScheduler.MovementSample muestra : nuevasMuestras) {
-    grafica.addDataPoint(
-            muestra.cycle(),
-            muestra.movement(),
-            "Desplazamiento acumulado");
-}
-
-muestrasGraficadas += nuevasMuestras.length;
+        metricas.append(String.format(
+                "Espera promedio: %.2f ciclos | Retorno C-SCAN: %d ciclos",
+                disco.getAverageWaitCycles(), disco.getTotalReturnCycles()));
+        metricas.append("<br>");
+        for (DiskPolicy politica : DiskPolicy.values()) {
+            metricas.append(String.format(
+                    "%s: %d atendidas (%.2f ciclos) &nbsp; | &nbsp; ",
+                    politica, disco.getServedCount(politica), disco.getAverageWaitCycles(politica)));
+        }
+        metricas.append("</html>");
+        String textoMetricas = metricas.toString();
+        return () -> {
+            sincronizando = true;
+            try {
+                if (comboPolitica.getSelectedItem() != estado.policy() && !comboPolitica.isPopupVisible()) {
+                    comboPolitica.setSelectedItem(estado.policy());
+                }
+                if (!spnVelocidad.getValue().equals(estado.speed()) && !spnVelocidad.hasFocus()) {
+                    spnVelocidad.setValue(estado.speed());
+                }
+            } finally {
+                sincronizando = false;
+            }
+            lblEstado.setText("   Cabezal: " + estado.currentHead() + " [" + estado.direction() + "]"
+                    + "   Desplazamiento: " + estado.totalHeadMovement()
+                    + "   Atendidas: " + estado.totalRequestsServed()
+                    + "   En cola: " + estado.pendingCount());
+            lblMetricas.setText(textoMetricas);
+            cola.mostrar(vista.entries());
+            mapa.mostrar(bloques, estado);
+            for (DiskScheduler.MovementSample muestra : nuevasMuestras) {
+                grafica.addDataPoint(muestra.cycle(), muestra.movement(), "Desplazamiento acumulado");
+            }
+            muestrasGraficadas += nuevasMuestras.length;
+        };
     }
 
     private static JPanel leyenda() {

@@ -25,6 +25,7 @@ import edu.unimet.avilaos.so.politicas.EDF;
 import edu.unimet.avilaos.so.politicas.FCFS;
 import edu.unimet.avilaos.so.politicas.PrioridadesApropiativas;
 import edu.unimet.avilaos.so.politicas.RoundRobin;
+import java.util.function.Supplier;
 
 /**
  * Arma el sistema distribuido: el reloj global y los computadores del cluster.
@@ -160,7 +161,25 @@ public class Simulador implements ServicioCluster {
         reloj.detener();
     }
 
+    /** Copia valores del modelo entre ciclos, sin trabajo Swing bajo el semaforo. */
+    public <T> T intentarObservar(Supplier<T> observacion) {
+        return reloj.intentarObservar(observacion);
+    }
+
+    /** Operacion breve del modelo; no llamar otra operacion que tome el reloj desde aqui. */
+    public <T> T observar(Supplier<T> observacion) {
+        return reloj.entreCiclos(observacion);
+    }
+
+    public SistemaArchivos copiaSistemaArchivos() {
+        return observar(() -> sistemaArchivos == null ? null : sistemaArchivos.copia());
+    }
+
     public void agregarProceso(PCB proceso) {
+        observar(() -> { agregarProcesoInterno(proceso); return null; });
+    }
+
+    private void agregarProcesoInterno(PCB proceso) {
         getComputador(proceso.getIdComputador()).agregarProceso(proceso);
         synchronized (procesosCreados) {
             procesosCreados.agregar(ConfigProceso.desde(proceso));
@@ -174,6 +193,10 @@ public class Simulador implements ServicioCluster {
      * Un rechazo se registra, no crea el proceso y la simulacion sigue.
      */
     public void solicitarProceso(PCB proceso) {
+        observar(() -> { solicitarProcesoInterno(proceso); return null; });
+    }
+
+    private void solicitarProcesoInterno(PCB proceso) {
         SesionUsuario actual = sesion;
         OperacionArchivo operacion = proceso.getOperacionArchivo();
         try {
@@ -192,12 +215,16 @@ public class Simulador implements ServicioCluster {
             log.registrar(getCicloActual(), "Se rechaza " + que + " en modo " + actual + ": " + e.getMessage());
             throw e;
         }
-        agregarProceso(proceso);
+        agregarProcesoInterno(proceso);
     }
 
     public SesionUsuario getSesion() { return sesion; }
 
     public void setSesion(SesionUsuario nueva) {
+        observar(() -> { setSesionInterno(nueva); return null; });
+    }
+
+    private void setSesionInterno(SesionUsuario nueva) {
         if (nueva == null) throw new IllegalArgumentException("Falta el modo de uso.");
         if (nueva.equals(sesion)) return;
         sesion = nueva;
@@ -212,12 +239,20 @@ public class Simulador implements ServicioCluster {
     }
 
     public void cambiarPolitica(int idComputador, PoliticaPlanificacion politica) {
+        observar(() -> { cambiarPoliticaInterno(idComputador, politica); return null; });
+    }
+
+    private void cambiarPoliticaInterno(int idComputador, PoliticaPlanificacion politica) {
         exigirAdministrador("cambiar la política de CPU");
         getComputador(idComputador).cambiarPolitica(crearEstrategia(politica, quantum));
     }
 
     /** Cambia el quantum en caliente; afecta a los computadores que ya usan Round Robin. */
     public void setQuantum(int quantum) {
+        observar(() -> { setQuantumInterno(quantum); return null; });
+    }
+
+    private void setQuantumInterno(int quantum) {
         exigirAdministrador("cambiar el quantum");
         if (quantum < Configuracion.MIN_QUANTUM || quantum > Configuracion.MAX_QUANTUM) {
             throw new IllegalArgumentException("El quantum debe estar entre 0 y " + Configuracion.MAX_QUANTUM + ".");
@@ -235,7 +270,7 @@ public class Simulador implements ServicioCluster {
     }
 
     public void setDuracionCicloMs(int ms) {
-        reloj.setDuracionCicloMs(ms);
+        observar(() -> { reloj.setDuracionCicloMs(ms); return null; });
     }
 
     /** Devuelve el computador con ese ID (de 1 a la cantidad de computadores). */
@@ -251,6 +286,10 @@ public class Simulador implements ServicioCluster {
      * y los buffers y procesos creados hasta ahora como carga inicial, para guardarlos.
      */
     public Configuracion getConfiguracion() {
+        return observar(this::copiarConfiguracion);
+    }
+
+    private Configuracion copiarConfiguracion() {
         Buffer[] existentes = getBuffers();
         ConfigBuffer[] datosBuffers = new ConfigBuffer[existentes.length];
         for (int i = 0; i < existentes.length; i++) {
@@ -348,11 +387,19 @@ public class Simulador implements ServicioCluster {
     public DiskScheduler getDisco() { return computadores[0].getDisco(); }
     public SistemaArchivos getSistemaArchivos() { return sistemaArchivos; }
     public void cambiarPoliticaDisco(DiskPolicy politica) {
+        observar(() -> { cambiarPoliticaDiscoInterno(politica); return null; });
+    }
+
+    private void cambiarPoliticaDiscoInterno(DiskPolicy politica) {
         exigirAdministrador("cambiar la política de disco");
         getDisco().setPolicy(politica);
     }
 
     public void setVelocidadDisco(int velocidad) {
+        observar(() -> { setVelocidadDiscoInterno(velocidad); return null; });
+    }
+
+    private void setVelocidadDiscoInterno(int velocidad) {
         exigirAdministrador("cambiar la velocidad del disco");
         getDisco().setSpeed(velocidad);
     }
