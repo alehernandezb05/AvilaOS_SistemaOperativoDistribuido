@@ -1,0 +1,6 @@
+proceso,operacion,bloque,llegada,seleccion,inicio,fin,espera,politica,estado
+Proc_95,READ,95,2,3,3,48,1,SSTF,COMPLETED
+Proc_64,READ,64,9,49,49,80,40,SSTF,COMPLETED
+Proc_62,READ,62,8,81,81,83,73,SSTF,COMPLETED
+Proc_11,READ,11,6,84,84,135,78,SSTF,COMPLETED
+Proc_180,READ,180,3,136,136,305,133,SSTF,COMPLETED
