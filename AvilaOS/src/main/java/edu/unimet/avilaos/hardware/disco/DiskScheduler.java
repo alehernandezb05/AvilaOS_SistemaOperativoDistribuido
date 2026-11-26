@@ -35,6 +35,9 @@ public class DiskScheduler implements ComponenteReloj {
     private int sweepReturnTarget = -1;
     private long totalHeadMovement;
     private long totalRequestsServed;
+    private long totalWaitCycles;
+    private long totalReturnCycles;
+    private final long[] waitByPolicy = new long[DiskPolicy.values().length];
     private volatile Log log;
 
     public DiskScheduler(int totalBlocks, int initialHead, int swapSizeBlocks, DiskPolicy policy) {
@@ -130,9 +133,11 @@ public class DiskScheduler implements ComponenteReloj {
             Thread.currentThread().interrupt();
             return;
         }
-        try {
-            if (cycle <= currentCycle) return;
-            currentCycle = cycle;
+        
+        long previousCycle = currentCycle;
+try {
+    if (cycle <= currentCycle) return;
+    currentCycle = cycle;
             if (sweepReturnTarget >= 0) {
                 advanceSweepReturn();
                 return;
@@ -166,12 +171,23 @@ public class DiskScheduler implements ComponenteReloj {
             }
             if (blockIndex == currentRequest.getBlockCount()) {
                 completions.encolar(currentRequest.complete(cycle, selectedPolicy));
+                long waitCycles = currentRequest.getStartCycle()
+        - currentRequest.getArrivalCycle();
+
+totalWaitCycles += waitCycles;
+waitByPolicy[selectedPolicy.ordinal()] += waitCycles;
                 totalRequestsServed++;
                 servedByPolicy[selectedPolicy.ordinal()]++;
                 currentRequest = null;
             }
-        } finally {
-            mutex.release();
+                } finally {
+            try {
+                if (currentCycle > previousCycle) {
+                    recordMovement();
+                }
+            } finally {
+                mutex.release();
+            }
         }
     }
     public void cancelRequest(DiskRequest request) {
@@ -213,9 +229,15 @@ public class DiskScheduler implements ComponenteReloj {
     // El retorno circular ocupa ciclos a la velocidad del disco y prolonga la espera.
     // Durante este trayecto no se seleccionan solicitudes ni se acumula desplazamiento.
     private void advanceSweepReturn() {
-        if (currentHead != sweepReturnTarget) moveHeadToward(sweepReturnTarget);
-        if (currentHead == sweepReturnTarget) sweepReturnTarget = -1;
+    if (currentHead != sweepReturnTarget) {
+        moveHeadToward(sweepReturnTarget);
+        totalReturnCycles++;
     }
+
+    if (currentHead == sweepReturnTarget) {
+        sweepReturnTarget = -1;
+    }
+}
 
     private int moveHeadToward(int target) {
         int distance = Math.min(speed, Math.abs(target - currentHead));
@@ -303,6 +325,79 @@ public class DiskScheduler implements ComponenteReloj {
         }
     }
 
+        public double getAverageWaitCycles() {
+        mutex.acquireUninterruptibly();
+        try {
+            return totalRequestsServed == 0 ? 0.0
+                    : (double) totalWaitCycles / totalRequestsServed;
+        } finally {
+            mutex.release();
+        }
+    }
+
+    public double getAverageWaitCycles(DiskPolicy policy) {
+        if (policy == null) {
+            throw new IllegalArgumentException("Falta la politica.");
+        }
+
+        mutex.acquireUninterruptibly();
+        try {
+            int index = policy.ordinal();
+            return servedByPolicy[index] == 0 ? 0.0
+                    : (double) waitByPolicy[index] / servedByPolicy[index];
+        } finally {
+            mutex.release();
+        }
+    }
+        public record MovementSample(long cycle, long movement) {
+    }
+
+    private MovementSample[] movementHistory =
+            new MovementSample[128];
+
+    private int movementHistorySize;
+
+    private void recordMovement() {
+        if (movementHistorySize == movementHistory.length) {
+            MovementSample[] expanded =
+                    new MovementSample[movementHistory.length * 2];
+
+            System.arraycopy(movementHistory, 0, expanded,
+                    0, movementHistorySize);
+
+            movementHistory = expanded;
+        }
+
+        movementHistory[movementHistorySize++] =
+                new MovementSample(currentCycle, totalHeadMovement);
+    }
+
+    public MovementSample[] getMovementHistory(int fromIndex) {
+        mutex.acquireUninterruptibly();
+        try {
+            if (fromIndex < 0 || fromIndex > movementHistorySize) {
+                throw new IllegalArgumentException("Indice invalido.");
+            }
+
+            MovementSample[] copy =
+                    new MovementSample[movementHistorySize - fromIndex];
+
+            System.arraycopy(movementHistory, fromIndex,
+                    copy, 0, copy.length);
+
+            return copy;
+        } finally {
+            mutex.release();
+        }
+    }    
+    public long getTotalReturnCycles() {
+        mutex.acquireUninterruptibly();
+        try {
+            return totalReturnCycles;
+        } finally {
+            mutex.release();
+        }
+    }
     public DiskStorage getStorage() { return storage; }
     public void setLog(Log log) { this.log = log; }
     public int getTotalBlocks() { return storage.getTotalBlocks(); }

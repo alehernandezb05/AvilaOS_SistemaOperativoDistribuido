@@ -34,10 +34,13 @@ public class PanelDisco extends JPanel {
 
     private final DiskScheduler disco;
     private final DiskMapPanel mapa;
+    private final DiskChartPanel grafica = new DiskChartPanel();
+private int muestrasGraficadas = 0;
     private final ModeloCola cola = new ModeloCola();
     private final JComboBox<DiskPolicy> comboPolitica = new JComboBox<>(DiskPolicy.values());
     private final JSpinner spnVelocidad;
     private final JLabel lblEstado = new JLabel();
+    private final JLabel lblMetricas = new JLabel();
     // Evita que actualizar el combo desde el disco se tome como una eleccion del usuario
     private boolean sincronizando;
 
@@ -54,8 +57,13 @@ public class PanelDisco extends JPanel {
         controles.add(new JLabel("Velocidad (bloques por ciclo):"));
         controles.add(spnVelocidad);
         lblEstado.setFont(lblEstado.getFont().deriveFont(Font.PLAIN));
-        controles.add(lblEstado);
-        add(controles, BorderLayout.NORTH);
+        JPanel cabecera = new JPanel(new BorderLayout(4, 4));
+
+cabecera.add(controles, BorderLayout.NORTH);
+cabecera.add(lblEstado, BorderLayout.CENTER);
+cabecera.add(lblMetricas, BorderLayout.SOUTH);
+
+add(cabecera, BorderLayout.NORTH);
 
         mapa = new DiskMapPanel(disco);
         JScrollPane mapaScroll = new JScrollPane(mapa);
@@ -75,8 +83,15 @@ public class PanelDisco extends JPanel {
 
         JSplitPane contenido = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, ladoMapa, tablaScroll);
         contenido.setResizeWeight(0.6);
-        add(contenido, BorderLayout.CENTER);
-        SwingUtilities.invokeLater(() -> contenido.setDividerLocation(0.6));
+JSplitPane vistaCompleta = new JSplitPane(
+        JSplitPane.VERTICAL_SPLIT, contenido, grafica);
+
+vistaCompleta.setResizeWeight(0.6);
+add(vistaCompleta, BorderLayout.CENTER);
+
+SwingUtilities.invokeLater(
+        () -> vistaCompleta.setDividerLocation(0.6));
+SwingUtilities.invokeLater(() -> contenido.setDividerLocation(0.6));
         actualizar();
     }
 
@@ -119,8 +134,38 @@ public class PanelDisco extends JPanel {
                 + "   Desplazamiento: " + estado.totalHeadMovement()
                 + "   Atendidas: " + estado.totalRequestsServed()
                 + "   En cola: " + estado.pendingCount());
+        StringBuilder metricas = new StringBuilder("<html>");
+
+metricas.append(String.format(
+        "Espera promedio: %.2f ciclos | Retorno C-SCAN: %d ciclos",
+        disco.getAverageWaitCycles(),
+        disco.getTotalReturnCycles()));
+
+metricas.append("<br>");
+
+for (DiskPolicy politica : DiskPolicy.values()) {
+    metricas.append(String.format(
+            "%s: %d atendidas (%.2f ciclos) &nbsp; | &nbsp; ",
+            politica,
+            disco.getServedCount(politica),
+            disco.getAverageWaitCycles(politica)));
+}
+
+metricas.append("</html>");
+lblMetricas.setText(metricas.toString());
         cola.mostrar(vista.entries());
         mapa.mostrar(disco.getBlocks(), estado);
+        DiskScheduler.MovementSample[] nuevasMuestras =
+        disco.getMovementHistory(muestrasGraficadas);
+
+for (DiskScheduler.MovementSample muestra : nuevasMuestras) {
+    grafica.addDataPoint(
+            muestra.cycle(),
+            muestra.movement(),
+            "Desplazamiento acumulado");
+}
+
+muestrasGraficadas += nuevasMuestras.length;
     }
 
     private static JPanel leyenda() {

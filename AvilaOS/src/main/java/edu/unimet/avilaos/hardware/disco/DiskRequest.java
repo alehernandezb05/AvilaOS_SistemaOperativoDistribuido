@@ -96,6 +96,17 @@ public final class DiskRequest {
     public int[] getBlockNumbers() { return blockNumbers.clone(); }
     public DiskRequestStatus getStatus() { return progress.status(); }
     public long getArrivalCycle() { return progress.arrival(); }
+    
+        // La seleccion y el inicio de atencion ocurren
+    // en el mismo ciclo, incluyendo la busqueda del bloque.
+    public long getSelectionCycle() {
+        return progress.start();
+    }
+
+    public long getCompletionCycle() {
+        DiskCompletion result = progress.result();
+        return result == null ? -1 : result.completionCycle();
+    }
     public long getStartCycle() { return progress.start(); }
     public DiskCompletion getResult() { return progress.result(); }
 }
