@@ -38,7 +38,9 @@ public final class PruebaCasosOficiales {
     public static void main(String[] args) throws Exception {
         Path escenarios = Files.isDirectory(Path.of("escenarios")) ? Path.of("escenarios") : Path.of("..", "escenarios");
         // Evidencia versionable: este ejecutable manual no forma parte de las pruebas automaticas Maven.
-        Path salida = escenarios.resolve("12_resultados_disco");
+        Path salida = args.length == 0 ? escenarios.resolve("12_resultados_disco") : Path.of(args[0]);
+        resumen.setLength(0);
+        resumen.append("escenario,politica,ciclo_final,atendidas,desplazamiento,espera_promedio,retorno_ciclos,orden\n");
         Files.createDirectories(salida);
         System.out.println("LOTE: disco 200, cabezal 50 UP, velocidad 1, llegada 0.");
         Serie[] casos = new Serie[4], anexo = new Serie[4], completos = new Serie[4];

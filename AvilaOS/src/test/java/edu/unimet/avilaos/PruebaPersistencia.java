@@ -77,7 +77,8 @@ public final class PruebaPersistencia {
                 && recargado.cabezalInicial() == actual.cabezalInicial(), "Se conserva la geometría del disco.");
 
         // Reiniciar con otra carga de procesos sobre el disco guardado
-        Simulador otro = new Simulador(oficial, recargado);
+        Simulador otro = new Simulador(ArchivoConfiguracion.cargar(
+                Path.of("../escenarios/07_un_computador.json")), recargado);
         DiskBlock[] mapa = otro.getDisco().getBlocks();
         for (int bloque : datos.cadena()) {
             comprobar(mapa[bloque].contentType() == DiskBlockType.FILE
@@ -88,6 +89,20 @@ public final class PruebaPersistencia {
         for (DiskBlock b : mapa) if (b.contentType() == DiskBlockType.SWAP_RESERVED) swap++;
         comprobar(swap == 100 && otro.impedimentoInicio() == null,
                 "La reserva de swap no choca con los archivos y la simulación puede iniciar.");
+        // Ejecutar la nueva carga, no solo comprobar que puede iniciar.
+        var computador = otro.getComputador(1);
+        for (long c = 1; c <= 100; c++) {
+            otro.getDisco().alCiclo(c);
+            computador.getNucleo().alCiclo(c);
+            computador.getCpu().alCiclo(c);
+        }
+        var metricas = edu.unimet.avilaos.metricas.CalculadorMetricas.deComputador(computador, 100);
+        comprobar(metricas.getTerminados() == 3 && metricas.getCompletados() == 2
+                && computador.getRam().getUsada() == 0,
+                "La segunda carga ejecuta CPU y E/S; el proceso que no cabe vence.");
+        comprobar(Arrays.equals(describir(actual), describir(otro.getSistemaArchivos())),
+                "La segunda ejecucion conserva las modificaciones y cadenas del disco recargado.");
+        System.out.println("OK: segunda carga CPU/RAM ejecutada sobre disco fragmentado recargado.");
         System.out.println("OK: crear, renombrar, borrar, guardar y recargar con equivalencia y otra carga.");
     }
 

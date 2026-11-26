@@ -16,7 +16,8 @@ import java.util.concurrent.Semaphore;
 public final class PruebaSincronizacion {
     public static void main(String[] args) throws Exception {
         interrupcion();
-        coherencia();
+        coherencia(PoliticaPlanificacion.FCFS);
+        coherencia(PoliticaPlanificacion.EDF);
         System.out.println("OK: sincronizacion y observacion coherente del sistema.");
     }
 
@@ -46,17 +47,18 @@ public final class PruebaSincronizacion {
         System.out.println("OK: interrupcion, pausa y observacion sin espera durante ciclo ocupado.");
     }
 
-    private static void coherencia() throws Exception {
+    private static void coherencia(PoliticaPlanificacion inicial) throws Exception {
         Configuracion cfg = new Configuracion(50, 3, 0,
-                new Configuracion.ConfigComputador[]{new Configuracion.ConfigComputador(32, PoliticaPlanificacion.FCFS)});
+                new Configuracion.ConfigComputador[]{new Configuracion.ConfigComputador(32, inicial)});
         cfg.setDisco(new ConfigDisco(200, 50, 100, 10, DiskPolicy.FIFO));
         cfg.conservarCargaProcesos(true);
         var sistema = new SistemaArchivos(200, 50, new SistemaArchivos.Entrada[0]);
         Simulador sim = new Simulador(cfg, sistema);
         var c = sim.getComputador(1);
-        PCB a = new PCB("A", 1, TipoProceso.IO_BOUND, 1, 16, 2, 5000, 0);
+        // FCFS y EDF deben seleccionar primero A, incluso si cambia la politica antes del primer ciclo.
+        PCB a = new PCB("A", 1, TipoProceso.IO_BOUND, 1, 16, 2, 2000, 0);
         a.setCiclosParaES(1); a.setDuracionES(30);
-        PCB b = new PCB("B", 1, TipoProceso.IO_BOUND, 1, 16, 50, 2000, 0);
+        PCB b = new PCB("B", 1, TipoProceso.IO_BOUND, 1, 16, 50, 5000, 0);
         b.setCiclosParaES(1); b.setDuracionES(500);
         sim.agregarProceso(a); sim.agregarProceso(b);
         sim.agregarProceso(new PCB("C", 1, TipoProceso.CPU_BOUND, 1, 16, 5, 5000, 0));
@@ -66,7 +68,13 @@ public final class PruebaSincronizacion {
         sim.setDuracionCicloMs(2);
         sim.iniciar();
         try {
-            esperar(sim, 110);
+            // El cambio de politica de disco puede variar la duracion del intercambio.
+            // Esperar la condicion real, con limite de ciclos y verificacion concurrente.
+            while (!sim.observar(() -> c.getNucleo().getSuspensionesCompletadas() > 0
+                    && c.getNucleo().getReactivacionesCompletadas() > 0)) {
+                comprobar(sim.getCicloActual() < 350, "Debe ocurrir un intercambio completo antes de 350 ciclos.");
+                esperar(sim, sim.getCicloActual() + 5);
+            }
             comprobar(tabla.getValueAt(0,3) == EstadoProceso.NUEVO, "La fila no puede cambiar sin refresco.");
             PCB crear = pedir(sim, DiskOperation.CREATE, "/prueba", 3, null);
             esperarFin(sim, crear);
@@ -85,7 +93,7 @@ public final class PruebaSincronizacion {
             comprobar(c.getNucleo().getSuspensionesCompletadas() > 0 && c.getNucleo().getReactivacionesCompletadas() > 0,
                     "Debe ocurrir un intercambio completo.");
             verificar(sim);
-            System.out.println("OK: CRUD, cambios de politica, RAM, colas, swap y copia de guardado con reloj activo.");
+            System.out.println("OK: CRUD, cambios de politica, RAM, colas, swap y copia de guardado con reloj activo (inicio " + inicial + ").");
             System.out.println("OK: tabla conserva valores copiados y no referencias PCB vivas.");
         } finally { sim.detener(); }
     }
