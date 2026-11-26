@@ -14,7 +14,7 @@ import javax.swing.table.AbstractTableModel;
 public class PanelMetricas extends JPanel {
 
     private static final String[] COLUMNAS_RENDIMIENTO = {
-        "", "Term.", "Compl.", "Thr/100", "CPU %", "Resp.", "Cumpl. %", "Jain"
+        "", "Term.", "Compl.", "Thr/100", "CPU %", "Resp.", "Cumpl. %", "Jain", "Susp.", "React."
     };
     private final Simulador simulador;
     private final ModeloTexto modeloRendimiento = new ModeloTexto(COLUMNAS_RENDIMIENTO);
@@ -26,7 +26,11 @@ public class PanelMetricas extends JPanel {
     }
 
     private static JScrollPane crearTabla(String titulo, ModeloTexto modelo) {
-        JScrollPane scroll = new JScrollPane(new JTable(modelo));
+        JTable tabla = new JTable(modelo);
+        tabla.getColumnModel().getColumn(0).setPreferredWidth(105);
+        tabla.getTableHeader().setToolTipText("Thr/100: completados por 100 ciclos; CPU y cumplimiento: %; "
+                + "Resp.: ciclos; Jain: indice de equidad; Susp./React.: transferencias completadas");
+        JScrollPane scroll = new JScrollPane(tabla);
         scroll.setBorder(BorderFactory.createTitledBorder(titulo));
         return scroll;
     }
@@ -55,7 +59,9 @@ public class PanelMetricas extends JPanel {
             texto(r.getUtilizacion(), 1),
             texto(r.getRespuestaPromedio(), 1),
             texto(r.getCumplimiento(), 1),
-            texto(r.getEquidad(), 2)
+            texto(r.getEquidad(), 2),
+            String.valueOf(r.getSuspensiones()),
+            String.valueOf(r.getReactivaciones())
         };
     }
 
