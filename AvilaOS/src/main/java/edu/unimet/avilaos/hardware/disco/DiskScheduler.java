@@ -174,7 +174,25 @@ public class DiskScheduler implements ComponenteReloj {
             mutex.release();
         }
     }
+    public void cancelRequest(DiskRequest request) {
+        if (request == null) {
+            return;
+        }
 
+        mutex.acquireUninterruptibly();
+        try {
+            if (currentRequest == request) {
+                request.cancel();
+                currentRequest = null;
+                blockIndex = 0;
+                selectedPolicy = null;
+            } else if (requestQueue.remover(request)) {
+                request.cancel();
+            }
+        } finally {
+            mutex.release();
+        }
+    }
     private void advanceSweep() {
         Sweep sweep = activePolicy.sweepWithoutRequest(getTotalBlocks() - 1, currentDirection);
         if (sweep == null) return;
