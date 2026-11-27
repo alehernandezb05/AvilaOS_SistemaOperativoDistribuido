@@ -84,6 +84,9 @@ public final class PruebaMetricasDisco {
                     "Historial incorrecto.");
         }
 
+        comprobar(historial[1].policy() == DiskPolicy.FIFO && historial[2].policy() == DiskPolicy.SSTF,
+                "Cada muestra guarda la política activa para separar las curvas.");
+
         comprobar(disco.getMovementHistory(4).length == 0,
                 "No deben generarse muestras ficticias.");
 

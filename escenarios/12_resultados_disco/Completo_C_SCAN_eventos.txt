@@ -48,6 +48,8 @@
 [ciclo 136] Computador 1 termina la solicitud 96 READ /usuarios/video.mp4 de P26 (Proc_180) (bloqueado -> listo)
 [ciclo 137] Computador 1 selecciona el proceso P26 (Proc_180)
 [ciclo 138] Computador 1 termina el proceso P26 (Proc_180) y libera 16 de RAM
+[ciclo 155] El disco llega al extremo 199 y regresa al bloque 0 sin atender solicitudes (C_SCAN)
+[ciclo 354] El disco termina el retorno en el bloque 0 (C_SCAN)
 [ciclo 355] El disco atiende la solicitud 99 READ de P29 en el bloque 11 (C_SCAN)
 [ciclo 366] Computador 1 termina la solicitud 99 READ /sistema/boot.bin de P29 (Proc_11) (bloqueado -> listo)
 [ciclo 367] El disco atiende la solicitud 97 UPDATE de P27 en el bloque 34 (C_SCAN)

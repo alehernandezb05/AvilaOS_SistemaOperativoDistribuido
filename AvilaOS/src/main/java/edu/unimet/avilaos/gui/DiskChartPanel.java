@@ -1,67 +1,44 @@
 package edu.unimet.avilaos.gui;
 
 import java.awt.BorderLayout;
+import java.awt.FlowLayout;
+import javax.swing.JButton;
+import javax.swing.JLabel;
 import javax.swing.JPanel;
 import org.jfree.chart.ChartFactory;
 import org.jfree.chart.ChartPanel;
 import org.jfree.chart.JFreeChart;
 import org.jfree.chart.axis.NumberAxis;
 import org.jfree.chart.plot.PlotOrientation;
-import org.jfree.data.xy.XYSeries;
-import org.jfree.data.xy.XYSeriesCollection;
 
+/** Gráfica del desplazamiento acumulado: una curva por ejecución y política, para compararlas. */
 public class DiskChartPanel extends JPanel {
 
-    private final XYSeriesCollection dataset;
     private final JFreeChart chart;
 
-    public DiskChartPanel() {
+    public DiskChartPanel(ComparacionDisco comparacion) {
         setLayout(new BorderLayout());
-
-        dataset = new XYSeriesCollection();
 
         chart = ChartFactory.createXYLineChart(
                 "Desplazamiento acumulado del cabezal",
                 "Ciclos de reloj",
                 "Desplazamiento (bloques)",
-                dataset,
+                comparacion.datos(),
                 PlotOrientation.VERTICAL,
                 true, true, false
         );
+        ((NumberAxis) chart.getXYPlot().getDomainAxis()).setStandardTickUnits(NumberAxis.createIntegerTickUnits());
+        ((NumberAxis) chart.getXYPlot().getRangeAxis()).setStandardTickUnits(NumberAxis.createIntegerTickUnits());
+        add(new ChartPanel(chart), BorderLayout.CENTER);
 
-        NumberAxis ejeX =
-                (NumberAxis) chart.getXYPlot().getDomainAxis();
-
-        ejeX.setStandardTickUnits(
-                NumberAxis.createIntegerTickUnits());
-
-        NumberAxis ejeY =
-                (NumberAxis) chart.getXYPlot().getRangeAxis();
-
-        ejeY.setStandardTickUnits(
-                NumberAxis.createIntegerTickUnits());
-
-        ChartPanel chartPanel = new ChartPanel(chart);
-        add(chartPanel, BorderLayout.CENTER);
+        JButton limpiar = new JButton("Limpiar gráfica");
+        limpiar.addActionListener(e -> comparacion.limpiar());
+        JPanel pie = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 2));
+        pie.add(new JLabel("Las curvas de ejecuciones anteriores se conservan al recargar para comparar políticas."));
+        pie.add(limpiar);
+        add(pie, BorderLayout.SOUTH);
     }
 
-    public void addDataPoint(long timeCycle,
-            long totalMovement, String policy) {
-
-        int index = dataset.getSeriesIndex(policy);
-
-        if (index == -1) {
-            dataset.addSeries(
-                    new XYSeries(policy, true, false));
-
-            index = dataset.getSeriesIndex(policy);
-        }
-
-        dataset.getSeries(index).addOrUpdate(
-                timeCycle, totalMovement);
-    }
-
-    public void clearChart() {
-        dataset.removeAllSeries();
-    }
+    /** Suelta las curvas compartidas para que una ventana cerrada no quede enganchada a ellas. */
+    void desconectar() { chart.getXYPlot().setDataset(null); }
 }

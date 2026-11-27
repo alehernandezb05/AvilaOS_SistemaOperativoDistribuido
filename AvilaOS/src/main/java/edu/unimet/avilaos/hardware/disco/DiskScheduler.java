@@ -15,7 +15,6 @@ import java.util.concurrent.Semaphore;
 public class DiskScheduler implements ComponenteReloj {
 
     public static final int MAX_BLOCKS = 500;
-    private static final System.Logger LOGGER = System.getLogger(DiskScheduler.class.getName());
     private final DiskStorage storage;
     private final int initialHead;
     private final int swapSizeBlocks;
@@ -33,6 +32,7 @@ public class DiskScheduler implements ComponenteReloj {
     private DiskPolicy selectedPolicy;
     private int blockIndex;
     private int sweepReturnTarget = -1;
+    private DiskPolicy returnPolicy;
     private long totalHeadMovement;
     private long totalRequestsServed;
     private long totalWaitCycles;
@@ -217,12 +217,15 @@ waitByPolicy[selectedPolicy.ordinal()] += waitCycles;
         if (currentHead != sweep.targetBlock()) return;
         if (sweep.returnBlock() >= 0) {
             sweepReturnTarget = sweep.returnBlock();
+            returnPolicy = activePolicy.getPolicy();
+            registrarEvento("El disco llega al extremo " + currentHead + " y regresa al bloque " + sweepReturnTarget
+                    + " sin atender solicitudes (" + activePolicy.getPolicy() + ")");
             if (alreadyAtTarget) advanceSweepReturn();
         } else if (currentDirection != sweep.directionOnArrival()) {
             DiskDirection previousDirection = currentDirection;
             currentDirection = sweep.directionOnArrival();
-            LOGGER.log(System.Logger.Level.INFO, "{0} cambia de {1} a {2} en el bloque {3}, ciclo {4}.",
-                    activePolicy.getPolicy(), previousDirection, currentDirection, currentHead, currentCycle);
+            registrarEvento("El disco llega al extremo " + currentHead + " y cambia de " + previousDirection
+                    + " a " + currentDirection + " (" + activePolicy.getPolicy() + ")");
         }
     }
 
@@ -235,9 +238,18 @@ waitByPolicy[selectedPolicy.ordinal()] += waitCycles;
     }
 
     if (currentHead == sweepReturnTarget) {
+        registrarEvento("El disco termina el retorno en el bloque " + currentHead + " (" + returnPolicy + ")");
         sweepReturnTarget = -1;
+        // El barrido circular siempre sigue hacia los bloques mayores.
+        currentDirection = DiskDirection.UP;
     }
 }
+
+    /** Las decisiones del disco van al mismo log de eventos que ve el usuario. */
+    private void registrarEvento(String mensaje) {
+        Log eventos = log;
+        if (eventos != null) eventos.registrar(currentCycle, mensaje);
+    }
 
     private int moveHeadToward(int target) {
         int distance = Math.min(speed, Math.abs(target - currentHead));
@@ -349,7 +361,8 @@ waitByPolicy[selectedPolicy.ordinal()] += waitCycles;
             mutex.release();
         }
     }
-        public record MovementSample(long cycle, long movement) {
+    /** Desplazamiento acumulado al cerrar un ciclo, con la política que estaba activa. */
+    public record MovementSample(long cycle, long movement, DiskPolicy policy) {
     }
 
     private MovementSample[] movementHistory =
@@ -369,7 +382,13 @@ waitByPolicy[selectedPolicy.ordinal()] += waitCycles;
         }
 
         movementHistory[movementHistorySize++] =
-                new MovementSample(currentCycle, totalHeadMovement);
+                new MovementSample(currentCycle, totalHeadMovement, policyMovingHead());
+    }
+
+    /** El tramo lo mueve la política que eligió la solicitud en curso o empezó el retorno, no la recién elegida. */
+    private DiskPolicy policyMovingHead() {
+        if (sweepReturnTarget >= 0) return returnPolicy;
+        return currentRequest != null ? selectedPolicy : activePolicy.getPolicy();
     }
 
     public MovementSample[] getMovementHistory(int fromIndex) {

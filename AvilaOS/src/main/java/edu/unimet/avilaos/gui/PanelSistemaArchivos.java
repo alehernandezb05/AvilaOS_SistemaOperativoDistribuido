@@ -84,8 +84,8 @@ final class PanelSistemaArchivos extends JPanel {
         tabla.setDefaultRenderer(Color.class, new DefaultTableCellRenderer() {
             @Override
             protected void setValue(Object valor) {
-                setText("■");
-                setForeground((Color) valor);
+                setText("");
+                setBackground((Color) valor);
             }
         });
 
@@ -251,7 +251,7 @@ final class PanelSistemaArchivos extends JPanel {
                 case 2 -> archivo.primerBloque();
                 case 3 -> archivo.duenio();
                 case 4 -> archivo.procesoCreador() == 0 ? "Carga JSON" : "P" + archivo.procesoCreador();
-                case 5 -> DiskMapPanel.COLOR_ARCHIVO;
+                case 5 -> DiskMapPanel.colorArchivo(archivo.ruta());
                 default -> throw new IndexOutOfBoundsException(columna);
             };
         }

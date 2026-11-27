@@ -159,7 +159,10 @@ public final class PruebaCasosOficiales {
         exigir(d.getAverageWaitCycles()==(double)suma/atendidas,"Espera completa inconsistente");
         exigir(d.getSnapshot().pendingCount()==0 && d.getSnapshot().activeRequestId()==-1,"Cola residual");
         Files.writeString(salida.resolve("Completo_"+p+"_procesos.csv"),estados);
-        Files.writeString(salida.resolve("Completo_"+p+"_eventos.txt"),String.join("\n",s.getLog().obtenerDesde(0)));
+        String eventos=String.join("\n",s.getLog().obtenerDesde(0));
+        if(p==DiskPolicy.SCAN) exigir(eventos.contains("llega al extremo 199 y cambia de UP a DOWN"),"SCAN no registra el cambio de dirección");
+        if(p==DiskPolicy.C_SCAN) exigir(eventos.contains("regresa al bloque 0") && eventos.contains("termina el retorno"),"C-SCAN no registra el retorno");
+        Files.writeString(salida.resolve("Completo_"+p+"_eventos.txt"),eventos);
         escribir("Completo",p,d,c,orden,recorrido,detalle,salida);
         System.out.printf("  procesos: %d completados, %d error E/S, %d deadline%n",completados,errores,vencidos);
         return new Serie(movimiento,c);

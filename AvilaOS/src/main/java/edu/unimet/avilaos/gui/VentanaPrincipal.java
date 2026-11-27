@@ -43,15 +43,18 @@ public class VentanaPrincipal extends JFrame {
     private final PanelDisco panelDisco;
     private final Timer refresco;
     private final BiConsumer<Simulador, String> alReiniciar;
+    private final ComparacionDisco comparacion;
 
     /**
+     * @param comparacion curvas del disco que se conservan entre ejecuciones
      * @param alReiniciar abre una simulación ya validada y restaura la ruta seleccionada
      */
-    public VentanaPrincipal(Simulador simulador, String rutaSeleccionada,
+    public VentanaPrincipal(Simulador simulador, String rutaSeleccionada, ComparacionDisco comparacion,
                             BiConsumer<Simulador, String> alReiniciar) {
         super("AvilaOS - Proyecto 2");
         this.simulador = simulador;
         this.alReiniciar = alReiniciar;
+        this.comparacion = comparacion;
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         setLayout(new BorderLayout());
 
@@ -85,7 +88,7 @@ public class VentanaPrincipal extends JFrame {
         panelArchivos = new PanelSistemaArchivos(simulador.getSistemaArchivos(), simulador.getDisco(), rutaSeleccionada,
                 this::cargarSistemaArchivos, this::guardarSistemaArchivos, this::abrirDialogoCrearLectura, this::abrirDialogoCrearEntrada,
                 this::abrirDialogoRenombrar, this::abrirDialogoEliminar);
-        panelDisco = new PanelDisco(simulador.getDisco());
+        panelDisco = new PanelDisco(simulador.getDisco(), comparacion);
         panelDisco.alCambiarPolitica(p -> {
             try {
                 simulador.cambiarPoliticaDisco(p);
@@ -248,6 +251,7 @@ public class VentanaPrincipal extends JFrame {
     @Override
     public void dispose() {
         refresco.stop();
+        panelDisco.desconectar();
         super.dispose();
     }
 
