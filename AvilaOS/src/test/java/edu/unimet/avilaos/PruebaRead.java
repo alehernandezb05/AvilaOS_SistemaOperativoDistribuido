@@ -79,24 +79,27 @@ final class PruebaRead {
     }
 
     private static void unCicloCompleto(Simulador sim) {
-        for (int ciclo = 1; ciclo <= 400; ciclo++) avanzar(sim, ciclo);
+        for (int ciclo = 1; ciclo <= 600; ciclo++) avanzar(sim, ciclo);
         var colas = sim.getComputador(1).getNucleo().getColas();
         int correctos = 0;
         int rechazados = 0;
+        int vencidos = 0;
         for (int i = 0; i < colas.cantidadTerminados(); i++) {
             PCB proceso = colas.obtenerTerminado(i);
             if (proceso.getMotivoTerminacion() == MotivoTerminacion.COMPLETADO) correctos++;
             if (proceso.getMotivoTerminacion() == MotivoTerminacion.ERROR_ES) rechazados++;
+            if (proceso.getMotivoTerminacion() == MotivoTerminacion.DEADLINE_VENCIDO) vencidos++;
         }
-        comprobar(correctos == 5 && rechazados == 3 && sim.getDisco().getTotalRequestsServed() == 5,
-                "El ejemplo ejecuta sus cinco READ y muestra los tres rechazos de escritura.");
-        var metricas = CalculadorMetricas.deComputador(sim.getComputador(1), 400);
-        comprobar(metricas.getTerminados() == 8 && metricas.getCompletados() == 5
-                && metricas.getCumplimiento() == 100.0, "Un rechazo de E/S no cuenta como deadline vencido.");
+        // Con FIFO y velocidad 1 el cabezal no alcanza a atender las ocho antes del deadline 500.
+        comprobar(correctos == 5 && rechazados == 0 && vencidos == 3 && sim.getDisco().getTotalRequestsServed() == 5,
+                "El ejemplo oficial no rechaza ninguna operación; con FIFO tres procesos vencen su deadline.");
+        var metricas = CalculadorMetricas.deComputador(sim.getComputador(1), 600);
+        comprobar(metricas.getTerminados() == 8 && metricas.getCompletados() == 5,
+                "Las métricas cuentan los ocho procesos terminados.");
         String log = String.join("\n", sim.getLog().obtenerDesde(0));
-        comprobar(log.contains("UPDATE requiere newName") && log.contains("DELETE denegado")
+        comprobar(log.contains("escribe /usuarios/notas.txt") && log.contains("elimina /usuarios/img1.png")
                 && log.contains("encola solicitud") && log.contains("El disco atiende") && log.contains("bloqueado -> listo"),
-                "El registro explica encolado, atención, fin y rechazos.");
+                "El registro explica encolado, atención, escritura, borrado y fin.");
     }
 
     private static void cicloRead(SistemaArchivos fragmentado) {

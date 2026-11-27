@@ -15,38 +15,53 @@
 [ciclo 1] Computador 1 admite el proceso P31 (Proc_62) (nuevo -> listo)
 [ciclo 1] Computador 1 admite el proceso P32 (Proc_64) (nuevo -> listo)
 [ciclo 1] Computador 1 selecciona el proceso P25 (Proc_95)
-[ciclo 2] Computador 1 encola solicitud 86 READ /sistema/config.sys de P25 (Proc_95) (ejecución -> bloqueado)
+[ciclo 2] Computador 1 encola solicitud 95 READ /sistema/config.sys de P25 (Proc_95) (ejecución -> bloqueado)
 [ciclo 2] Computador 1 selecciona el proceso P26 (Proc_180)
-[ciclo 3] El disco atiende la solicitud 86 READ de P25 en el bloque 95 (C_SCAN)
-[ciclo 3] Computador 1 encola solicitud 87 READ /usuarios/video.mp4 de P26 (Proc_180) (ejecución -> bloqueado)
+[ciclo 3] El disco atiende la solicitud 95 READ de P25 en el bloque 95 (C_SCAN)
+[ciclo 3] Computador 1 encola solicitud 96 READ /usuarios/video.mp4 de P26 (Proc_180) (ejecución -> bloqueado)
 [ciclo 3] Computador 1 selecciona el proceso P27 (Proc_34)
-[ciclo 4] Computador 1 rechaza UPDATE /usuarios/notas.txt de P27 (Proc_34). UPDATE requiere newName: falta el nombre destino.
+[ciclo 4] Computador 1 encola solicitud 97 UPDATE /usuarios/notas.txt de P27 (Proc_34) (ejecución -> bloqueado)
 [ciclo 4] Computador 1 selecciona el proceso P28 (Proc_119)
-[ciclo 5] Computador 1 rechaza DELETE /usuarios/img1.png de P28 (Proc_119). DELETE denegado: /usuarios/img1.png requiere administrador o ser dueño del archivo.
+[ciclo 5] Computador 1 encola solicitud 98 DELETE /usuarios/img1.png de P28 (Proc_119) (ejecución -> bloqueado)
 [ciclo 5] Computador 1 selecciona el proceso P29 (Proc_11)
-[ciclo 6] Computador 1 encola solicitud 88 READ /sistema/boot.bin de P29 (Proc_11) (ejecución -> bloqueado)
+[ciclo 6] Computador 1 encola solicitud 99 READ /sistema/boot.bin de P29 (Proc_11) (ejecución -> bloqueado)
 [ciclo 6] Computador 1 selecciona el proceso P30 (Proc_123)
-[ciclo 7] Computador 1 rechaza UPDATE /usuarios/data.csv de P30 (Proc_123). UPDATE requiere newName: falta el nombre destino.
+[ciclo 7] Computador 1 encola solicitud 100 UPDATE /usuarios/data.csv de P30 (Proc_123) (ejecución -> bloqueado)
 [ciclo 7] Computador 1 selecciona el proceso P31 (Proc_62)
-[ciclo 8] Computador 1 encola solicitud 89 READ /sistema/script.py de P31 (Proc_62) (ejecución -> bloqueado)
+[ciclo 8] Computador 1 encola solicitud 101 READ /sistema/script.py de P31 (Proc_62) (ejecución -> bloqueado)
 [ciclo 8] Computador 1 selecciona el proceso P32 (Proc_64)
-[ciclo 9] Computador 1 encola solicitud 90 READ /sistema/core.dll de P32 (Proc_64) (ejecución -> bloqueado)
-[ciclo 48] Computador 1 termina la solicitud 86 READ /sistema/config.sys de P25 (Proc_95) (bloqueado -> listo)
-[ciclo 49] El disco atiende la solicitud 87 READ de P26 en el bloque 180 (C_SCAN)
+[ciclo 9] Computador 1 encola solicitud 102 READ /sistema/core.dll de P32 (Proc_64) (ejecución -> bloqueado)
+[ciclo 48] Computador 1 termina la solicitud 95 READ /sistema/config.sys de P25 (Proc_95) (bloqueado -> listo)
+[ciclo 49] El disco atiende la solicitud 98 DELETE de P28 en el bloque 119 (C_SCAN)
 [ciclo 49] Computador 1 selecciona el proceso P25 (Proc_95)
 [ciclo 50] Computador 1 termina el proceso P25 (Proc_95) y libera 16 de RAM
-[ciclo 134] Computador 1 termina la solicitud 87 READ /usuarios/video.mp4 de P26 (Proc_180) (bloqueado -> listo)
-[ciclo 135] Computador 1 selecciona el proceso P26 (Proc_180)
-[ciclo 136] Computador 1 termina el proceso P26 (Proc_180) y libera 16 de RAM
-[ciclo 353] El disco atiende la solicitud 88 READ de P29 en el bloque 11 (C_SCAN)
-[ciclo 364] Computador 1 termina la solicitud 88 READ /sistema/boot.bin de P29 (Proc_11) (bloqueado -> listo)
-[ciclo 365] El disco atiende la solicitud 89 READ de P31 en el bloque 62 (C_SCAN)
-[ciclo 365] Computador 1 selecciona el proceso P29 (Proc_11)
-[ciclo 366] Computador 1 termina el proceso P29 (Proc_11) y libera 16 de RAM
-[ciclo 416] Computador 1 termina la solicitud 89 READ /sistema/script.py de P31 (Proc_62) (bloqueado -> listo)
-[ciclo 417] El disco atiende la solicitud 90 READ de P32 en el bloque 64 (C_SCAN)
-[ciclo 417] Computador 1 selecciona el proceso P31 (Proc_62)
-[ciclo 418] Computador 1 termina el proceso P31 (Proc_62) y libera 16 de RAM
-[ciclo 419] Computador 1 termina la solicitud 90 READ /sistema/core.dll de P32 (Proc_64) (bloqueado -> listo)
-[ciclo 420] Computador 1 selecciona el proceso P32 (Proc_64)
-[ciclo 421] Computador 1 termina el proceso P32 (Proc_64) y libera 16 de RAM
+[ciclo 73] Computador 1 elimina /usuarios/img1.png y libera sus bloques
+[ciclo 73] Computador 1 termina la solicitud 98 DELETE /usuarios/img1.png de P28 (Proc_119) (bloqueado -> listo)
+[ciclo 74] El disco atiende la solicitud 100 UPDATE de P30 en el bloque 123 (C_SCAN)
+[ciclo 74] Computador 1 selecciona el proceso P28 (Proc_119)
+[ciclo 75] Computador 1 termina el proceso P28 (Proc_119) y libera 16 de RAM
+[ciclo 78] Computador 1 escribe /usuarios/data.csv
+[ciclo 78] Computador 1 termina la solicitud 100 UPDATE /usuarios/data.csv de P30 (Proc_123) (bloqueado -> listo)
+[ciclo 79] El disco atiende la solicitud 96 READ de P26 en el bloque 180 (C_SCAN)
+[ciclo 79] Computador 1 selecciona el proceso P30 (Proc_123)
+[ciclo 80] Computador 1 termina el proceso P30 (Proc_123) y libera 16 de RAM
+[ciclo 136] Computador 1 termina la solicitud 96 READ /usuarios/video.mp4 de P26 (Proc_180) (bloqueado -> listo)
+[ciclo 137] Computador 1 selecciona el proceso P26 (Proc_180)
+[ciclo 138] Computador 1 termina el proceso P26 (Proc_180) y libera 16 de RAM
+[ciclo 355] El disco atiende la solicitud 99 READ de P29 en el bloque 11 (C_SCAN)
+[ciclo 366] Computador 1 termina la solicitud 99 READ /sistema/boot.bin de P29 (Proc_11) (bloqueado -> listo)
+[ciclo 367] El disco atiende la solicitud 97 UPDATE de P27 en el bloque 34 (C_SCAN)
+[ciclo 367] Computador 1 selecciona el proceso P29 (Proc_11)
+[ciclo 368] Computador 1 termina el proceso P29 (Proc_11) y libera 16 de RAM
+[ciclo 390] Computador 1 escribe /usuarios/notas.txt
+[ciclo 390] Computador 1 termina la solicitud 97 UPDATE /usuarios/notas.txt de P27 (Proc_34) (bloqueado -> listo)
+[ciclo 391] El disco atiende la solicitud 101 READ de P31 en el bloque 62 (C_SCAN)
+[ciclo 391] Computador 1 selecciona el proceso P27 (Proc_34)
+[ciclo 392] Computador 1 termina el proceso P27 (Proc_34) y libera 16 de RAM
+[ciclo 419] Computador 1 termina la solicitud 101 READ /sistema/script.py de P31 (Proc_62) (bloqueado -> listo)
+[ciclo 420] El disco atiende la solicitud 102 READ de P32 en el bloque 64 (C_SCAN)
+[ciclo 420] Computador 1 selecciona el proceso P31 (Proc_62)
+[ciclo 421] Computador 1 termina el proceso P31 (Proc_62) y libera 16 de RAM
+[ciclo 422] Computador 1 termina la solicitud 102 READ /sistema/core.dll de P32 (Proc_64) (bloqueado -> listo)
+[ciclo 423] Computador 1 selecciona el proceso P32 (Proc_64)
+[ciclo 424] Computador 1 termina el proceso P32 (Proc_64) y libera 16 de RAM

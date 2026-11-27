@@ -262,7 +262,8 @@ public class NucleoSO implements ComponenteReloj {
             }
             OperacionArchivo hecha = proceso.getOperacionArchivo();
             if (resultado.operation() == DiskOperation.UPDATE) {
-                registrar("renombra " + hecha.ruta() + " a " + hecha.nuevoNombre());
+                registrar(hecha.nuevoNombre() == null ? "escribe " + hecha.ruta()
+                        : "renombra " + hecha.ruta() + " a " + hecha.nuevoNombre());
             } else if (resultado.operation() == DiskOperation.DELETE) {
                 registrar("elimina " + hecha.ruta() + " y libera sus bloques");
             }

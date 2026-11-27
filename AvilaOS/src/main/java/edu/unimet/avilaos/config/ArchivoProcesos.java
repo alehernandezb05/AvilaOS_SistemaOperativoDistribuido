@@ -6,6 +6,7 @@ import edu.unimet.avilaos.hardware.disco.enums.DiskOperation;
 import edu.unimet.avilaos.hardware.disco.enums.DiskPolicy;
 import edu.unimet.avilaos.so.PoliticaPlanificacion;
 import edu.unimet.avilaos.so.archivos.OperacionArchivo;
+import edu.unimet.avilaos.so.archivos.SistemaArchivos;
 
 import static edu.unimet.avilaos.config.CamposJson.entero;
 import static edu.unimet.avilaos.config.CamposJson.objeto;
@@ -68,8 +69,10 @@ final class ArchivoProcesos {
             case "DELETE" -> DiskOperation.DELETE;
             default -> throw new IllegalArgumentException("operation debe ser CREATE, READ, UPDATE o DELETE.");
         };
+        // Solo el administrador puede cargar este archivo, así que sus procesos actúan como admin salvo que digan otro.
+        String solicitante = textoOpcional(entrada, "requester");
         OperacionArchivo operacion = new OperacionArchivo(tipo, texto(entrada, "targetPath"),
-                textoOpcional(entrada, "requester"), tipo == DiskOperation.CREATE
+                solicitante == null ? SistemaArchivos.ADMINISTRADOR : solicitante, tipo == DiskOperation.CREATE
                         ? entero(entrada.get("fileSizeBlocks"), "fileSizeBlocks")
                         : enteroOpcional(entrada, "fileSizeBlocks", 0),
                 textoOpcional(entrada, "newName"));

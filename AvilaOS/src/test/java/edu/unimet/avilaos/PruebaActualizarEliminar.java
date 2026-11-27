@@ -114,7 +114,7 @@ final class PruebaActualizarEliminar {
     private static void rechazosDeActualizacion() {
         Simulador sim = simulador();
         PCB[] rechazados = {
-            renombrar("/otro", "admin", null), renombrar("/otro", "bob", "x"), renombrar("/otro", null, "x"),
+            renombrar("/otro", "ana", null), renombrar("/ana", "admin", null), renombrar("/otro", "bob", "x"), renombrar("/otro", null, "x"),
             renombrar("/ana/previo", "admin", "sub"), renombrar("/otro", "admin", "otro"),
             renombrar("/nada", "admin", "x"), renombrar("/ana/sub/a.txt", "ana", "b.txt")
         };
@@ -124,7 +124,8 @@ final class PruebaActualizarEliminar {
             verificar(pcb.getMotivoTerminacion() == MotivoTerminacion.ERROR_ES,
                     "UPDATE inválido debe fallar: " + pcb.getOperacionArchivo());
         }
-        verificar(logContiene(sim, "UPDATE requiere newName") && logContiene(sim, "requiere administrador")
+        verificar(logContiene(sim, "pertenece a bob") && logContiene(sim, "No existe un archivo en /ana.")
+                && logContiene(sim, "requiere administrador")
                 && logContiene(sim, "Ya existe /ana/sub") && logContiene(sim, "igual al actual")
                 && logContiene(sim, "No existe /nada"), "Cada rechazo explica el motivo en el log.");
         verificar(sim.getSistemaArchivos().cantidadArchivos() == 3 && sim.getDisco().getTotalRequestsServed() == 0

@@ -13,7 +13,7 @@ import java.util.concurrent.Semaphore;
 /** Jerarquía del sistema de archivos, independiente de Swing. */
 public final class SistemaArchivos {
 
-    static final String ADMINISTRADOR = "admin";
+    public static final String ADMINISTRADOR = "admin";
 
     public enum Tipo { DIRECTORY, FILE }
     public enum Permiso { PUBLIC, PRIVATE }
@@ -255,7 +255,9 @@ public final class SistemaArchivos {
                     validarPermisoCreacion(solicitante, operacion.bloques() == 0, padre.entrada);
                 }
                 case UPDATE -> {
-                    if (!ADMINISTRADOR.equals(solicitante)) {
+                    if (operacion.nuevoNombre() == null) {
+                        archivoParaEscritura(operacion.ruta(), solicitante);
+                    } else if (!ADMINISTRADOR.equals(solicitante)) {
                         throw new IllegalArgumentException("UPDATE denegado: renombrar requiere administrador.");
                     }
                 }
@@ -279,16 +281,36 @@ public final class SistemaArchivos {
         }
     }
 
-    /** Renombrar es trabajo de metadatos: un ciclo de disco, sin mover los bloques del archivo. */
+    /** Escribir el contenido exige un archivo propio o ser administrador; no se pueden modificar archivos ajenos. */
+    private Entrada archivoParaEscritura(String ruta, String solicitante) {
+        Nodo nodo = buscar(ruta);
+        if (nodo == null || nodo.entrada.tipo() != Tipo.FILE) {
+            throw new IllegalArgumentException("No existe un archivo en " + ruta + ".");
+        }
+        Entrada archivo = nodo.entrada;
+        if (!ADMINISTRADOR.equals(solicitante) && !archivo.duenio().equals(solicitante)) {
+            throw new IllegalArgumentException("UPDATE denegado: " + ruta + " pertenece a " + archivo.duenio() + ".");
+        }
+        return archivo;
+    }
+
+    /**
+     * Sin newName, UPDATE escribe sobre los bloques del archivo: el disco recorre su cadena como en READ.
+     * Con newName renombra, que es trabajo de metadatos: un ciclo de disco, sin mover los bloques del archivo.
+     */
     public DiskRequest prepararActualizacion(OperacionArchivo operacion, int procesoId, String proceso) {
         mutex.acquireUninterruptibly();
         try {
             if (operacion.tipo() != DiskOperation.UPDATE) throw new IllegalArgumentException("Se esperaba UPDATE.");
             String nuevoNombre = operacion.nuevoNombre();
-            if (nuevoNombre == null) {
-                throw new IllegalArgumentException("UPDATE requiere newName: falta el nombre destino.");
-            }
             String ruta = operacion.ruta();
+            if (nuevoNombre == null) {
+                Entrada archivo = archivoParaEscritura(ruta, operacion.solicitante());
+                validarSinConflicto(ruta, null);
+                DiskRequest solicitud = new DiskRequest(procesoId, proceso, DiskOperation.UPDATE, archivo.cadena());
+                cambios.agregar(new Cambio(solicitud.getId(), DiskOperation.UPDATE, ruta, null));
+                return solicitud;
+            }
             if (ruta.equals("/")) throw new IllegalArgumentException("No se puede renombrar el directorio raíz.");
             Nodo nodo = buscar(ruta);
             if (nodo == null) throw new IllegalArgumentException("No existe " + ruta + ": fue eliminado o nunca existió.");
@@ -399,6 +421,8 @@ public final class SistemaArchivos {
             throw new IllegalArgumentException("No existe " + cambio.ruta + ": fue eliminado antes de terminar.");
         }
         if (cambio.tipo == DiskOperation.UPDATE) {
+            // Una escritura no cambia la estructura: basta con que el archivo siga existiendo.
+            if (cambio.destino == null) return;
             if (buscar(cambio.destino) != null) throw new IllegalArgumentException("Ya existe " + cambio.destino + ".");
             Entrada[] entradas = new Entrada[vista.entradas.length];
             for (int i = 0; i < entradas.length; i++) {
