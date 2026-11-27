@@ -197,7 +197,11 @@ se acumulen en la cola sin atenderlas; al soltarlo, la politica elige entre
 todas. Asi se ven en la ventana los casos P1-P4: cargar los dos JSON oficiales,
 marcar **Retener disco**, iniciar, esperar a que la cola tenga 8 solicitudes y
 desmarcarlo. Con FIFO conviene velocidad 2, porque a velocidad 1 el recorrido
-de 644 bloques no termina antes del deadline 500.
+de 644 bloques no termina antes del deadline 500. Mientras esta retenido, el
+disco sigue atendiendo las suspensiones y reactivaciones (swap); solo esperan
+las operaciones de archivo. Pasar a modo usuario lo suelta. Es una herramienta
+de observacion: con retencion se comparan orden y desplazamiento, no la espera
+promedio, porque esta incluye los ciclos retenidos.
 
 Guardar el sistema de archivos, o cargar otros procesos sobre el disco actual,
 conserva la posicion actual del cabezal como `initialHead`.

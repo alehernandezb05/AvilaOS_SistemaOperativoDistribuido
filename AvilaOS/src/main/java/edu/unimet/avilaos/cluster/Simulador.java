@@ -230,6 +230,12 @@ public class Simulador implements ServicioCluster {
         if (nueva.equals(sesion)) return;
         sesion = nueva;
         log.registrar(getCicloActual(), "Cambia el modo de uso a " + nueva);
+        // Un usuario no puede soltar el disco: si quedó retenido, se suelta para que sus procesos avancen.
+        DiskScheduler disco = getDisco();
+        if (!nueva.esAdministrador() && disco != null && disco.isHeld()) {
+            disco.setHeld(false);
+            log.registrar(getCicloActual(), "Se suelta el disco al salir del modo administrador");
+        }
     }
 
     /** Las politicas y el quantum los gestiona el administrador; tambien se valida aqui, no solo en la interfaz. */

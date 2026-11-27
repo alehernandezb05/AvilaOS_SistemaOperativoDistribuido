@@ -198,10 +198,33 @@ public final class PruebaCasosOficiales {
         exigir(String.join("\n",s.getLog().obtenerDesde(0)).contains("Se suelta el disco con 8 solicitudes"),"El log registra la retención");
         exigir(s.copiaSistemaArchivos().cabezalInicial()==d.getCurrentHead() && d.getCurrentHead()!=50,
                 "Guardar o recargar conserva la posición actual del cabezal");
+        if(p==DiskPolicy.FIFO) {
+            // Un usuario no puede soltar el disco, así que salir del modo administrador lo suelta.
+            Simulador u=cargar(p,escenarios);
+            u.setDiscoRetenido(true);
+            u.setSesion(new edu.unimet.avilaos.so.archivos.SesionUsuario(edu.unimet.avilaos.so.ModoUsuario.USUARIO,"ana"));
+            exigir(!u.getDisco().isHeld(),"Pasar a modo usuario suelta el disco");
+        }
         System.out.println("  "+p+": "+Arrays.toString(orden)+" desplazamiento "+d.getTotalHeadMovement());
     }
 
+    /** Retenido, el disco atiende swap y deja esperando las operaciones de archivo. */
+    private static void retencionDejaPasarSwap() {
+        DiskScheduler d=new DiskScheduler(200,50,0,DiskPolicy.FIFO);
+        d.setHeld(true);
+        d.addRequest(new DiskRequest(1,"A",DiskOperation.READ,60));
+        d.addRequest(new DiskRequest(2,"B",DiskOperation.SUSPEND,40));
+        for(int c=1;c<=20;c++) d.alCiclo(c);
+        DiskCompletion hecha=d.pollCompleted();
+        exigir(hecha!=null && hecha.operation()==DiskOperation.SUSPEND && d.pollCompleted()==null
+                && d.getSnapshot().pendingCount()==1,"Retenido, solo se atiende la suspensión");
+        d.setHeld(false);
+        for(int c=21;c<=60;c++) d.alCiclo(c);
+        exigir(d.pollCompleted()!=null && d.getSnapshot().pendingCount()==0,"Al soltar, se atiende la lectura");
+    }
+
     private static void bordes() {
+        retencionDejaPasarSwap();
         for(DiskPolicy p:DiskPolicy.values()) {
             DiskScheduler d=new DiskScheduler(200,199,0,p);
             d.alCiclo(1); exigir(d.getCurrentHead()==199 && d.getTotalHeadMovement()==0 && d.getAverageWaitCycles()==0,"Cola vacia");
