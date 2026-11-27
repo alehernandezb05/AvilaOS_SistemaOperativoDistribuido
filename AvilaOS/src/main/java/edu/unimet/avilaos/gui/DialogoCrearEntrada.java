@@ -3,6 +3,7 @@ package edu.unimet.avilaos.gui;
 import edu.unimet.avilaos.hardware.disco.enums.DiskOperation;
 import edu.unimet.avilaos.so.archivos.OperacionArchivo;
 import edu.unimet.avilaos.so.archivos.SistemaArchivos;
+import edu.unimet.avilaos.so.archivos.SistemaArchivos.Permiso;
 import edu.unimet.avilaos.so.archivos.SistemaArchivos.Tipo;
 import java.awt.Component;
 import java.awt.GridLayout;
@@ -21,7 +22,7 @@ final class DialogoCrearEntrada {
 
     private DialogoCrearEntrada() { }
 
-    /** Solo el administrador puede elegir crear un directorio. */
+    /** Solo el administrador puede crear directorios y asignar otro dueño; todos eligen el permiso. */
     static OperacionArchivo solicitar(Component padre, String directorio, int maxBloques, String solicitante,
                                       boolean permitirDirectorio) {
         JPanel campos = new JPanel(new GridLayout(0, 2, 8, 6));
@@ -37,7 +38,22 @@ final class DialogoCrearEntrada {
                         indice, seleccionado, foco);
             }
         });
-        tipo.addActionListener(e -> bloques.setEnabled(tipo.getSelectedItem() == Tipo.FILE));
+        JTextField duenio = new JTextField(solicitante, 20);
+        JComboBox<Permiso> permiso = new JComboBox<>(new Permiso[] {Permiso.PRIVATE, Permiso.PUBLIC});
+        permiso.setRenderer(new DefaultListCellRenderer() {
+            @Override
+            public Component getListCellRendererComponent(JList<?> lista, Object valor,
+                    int indice, boolean seleccionado, boolean foco) {
+                return super.getListCellRendererComponent(lista, valor == Permiso.PUBLIC ? "Público" : "Privado",
+                        indice, seleccionado, foco);
+            }
+        });
+        // El permiso solo controla la lectura de archivos: en un directorio no tendría efecto.
+        tipo.addActionListener(e -> {
+            boolean archivo = tipo.getSelectedItem() == Tipo.FILE;
+            bloques.setEnabled(archivo);
+            permiso.setEnabled(archivo);
+        });
         campos.add(new JLabel("Directorio destino"));
         campos.add(new JLabel(directorio));
         campos.add(new JLabel("Nombre"));
@@ -46,6 +62,12 @@ final class DialogoCrearEntrada {
         campos.add(tipo);
         campos.add(new JLabel("Tamaño en bloques (1–" + maxBloques + ")"));
         campos.add(bloques);
+        if (permitirDirectorio) {
+            campos.add(new JLabel("Dueño"));
+            campos.add(duenio);
+        }
+        campos.add(new JLabel("Permiso"));
+        campos.add(permiso);
         campos.add(new JLabel("Solicitante"));
         campos.add(new JLabel(solicitante));
 
@@ -59,7 +81,8 @@ final class DialogoCrearEntrada {
                 }
                 return new OperacionArchivo(DiskOperation.CREATE,
                         SistemaArchivos.rutaHija(directorio, nombre.getText().strip()),
-                        solicitante, cantidad, null);
+                        solicitante, cantidad, null, permitirDirectorio ? duenio.getText() : solicitante,
+                        cantidad > 0 ? (Permiso) permiso.getSelectedItem() : null);
             } catch (ParseException e) {
                 mostrarError(padre, "El tamaño debe ser un entero entre 1 y " + maxBloques + ".");
             } catch (IllegalArgumentException e) {

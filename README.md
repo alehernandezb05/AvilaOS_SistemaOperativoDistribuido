@@ -49,9 +49,12 @@ los ocho.
 
 Selecciona un directorio y pulsa **Crear archivo o directorio…** para encolar
 un proceso CREATE. El árbol, la tabla y el mapa muestran el cambio al terminar
-la E/S. Se registra el PCB creador y la entrada nace privada. En esta simulación
-`admin` puede crear en cualquier directorio. Los demás solicitantes solo
-pueden crear archivos en sus propios directorios.
+la E/S. Se registra el PCB creador. El diálogo permite elegir si la entrada es
+pública o privada (privada por defecto). `admin` puede crear en cualquier
+directorio y asignar otro dueño: así crea, por ejemplo, `/usuarios/ana` con
+dueña `ana`. Los demás usuarios solo pueden crear archivos a su nombre dentro
+de sus propios directorios. En el JSON, CREATE acepta `owner` y `permissions`
+opcionales, con los mismos valores del JSON del sistema de archivos.
 
 `UPDATE` sin `newName` escribe sobre el archivo: el disco recorre su cadena
 igual que en una lectura y la estructura no cambia. Lo pueden pedir `admin` o
