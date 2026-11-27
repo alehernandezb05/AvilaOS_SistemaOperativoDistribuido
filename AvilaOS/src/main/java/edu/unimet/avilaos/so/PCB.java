@@ -1,5 +1,8 @@
 package edu.unimet.avilaos.so;
 
+import edu.unimet.avilaos.hardware.disco.DiskRequest;
+import edu.unimet.avilaos.so.archivos.OperacionArchivo;
+
 public class PCB {
 
     private static final int PASOS_PROTOCOLO = 5;
@@ -18,6 +21,15 @@ public class PCB {
     private final int prioridad;
     private final int memoria;
     private final int totalInstrucciones;
+    private final OperacionArchivo operacionArchivo;
+    private boolean instruccionArchivoEjecutada;
+    private DiskRequest solicitudDisco;
+    private DiskRequest solicitudSwap;
+    private DiskRequest solicitudReactivacion;
+    private boolean enSwap;
+    private boolean eventoDuranteSuspension;
+    private int ciclosBloqueoActual;
+    private String avisoAdmision;
 
     private EstadoProceso estado;
     private MotivoBloqueo motivoBloqueo;
@@ -53,6 +65,14 @@ public class PCB {
 
     public PCB(String nombre, int idComputador, TipoProceso tipo, int prioridad,
                int memoria, int totalInstrucciones, int deadline, long cicloCreacion) {
+        this(nombre, idComputador, tipo, prioridad, memoria, totalInstrucciones, deadline, cicloCreacion, null);
+    }
+
+    public PCB(String nombre, int idComputador, TipoProceso tipo, int prioridad,
+               int memoria, int totalInstrucciones, int deadline, long cicloCreacion, OperacionArchivo operacionArchivo) {
+        if (operacionArchivo != null && tipo != TipoProceso.IO_BOUND) {
+            throw new IllegalArgumentException("Una operación de archivo requiere un proceso de E/S.");
+        }
         this.id = siguienteId();
         this.nombre = nombre;
         this.idComputador = idComputador;
@@ -60,6 +80,7 @@ public class PCB {
         this.prioridad = prioridad;
         this.memoria = memoria;
         this.totalInstrucciones = totalInstrucciones;
+        this.operacionArchivo = operacionArchivo;
         this.deadline = deadline;
         this.tiempoRestante = totalInstrucciones;
         this.estado = EstadoProceso.NUEVO;
@@ -95,16 +116,62 @@ public class PCB {
     }
 
     public void ejecutarInstruccion() {
+        if (debeEnviarSolicitudDisco()) return;
         programCounter++;
         mar++;
         if (esProductorConsumidor()) {
             return;
         }
         tiempoRestante--;
-        if (tipo == TipoProceso.IO_BOUND) {
+        if (ejecutaraOperacionArchivo()) {
+            instruccionArchivoEjecutada = true;
+        } else if (tipo == TipoProceso.IO_BOUND && operacionArchivo == null) {
             contadorCiclosES++;
         }
     }
+
+    boolean ejecutaraOperacionArchivo() { return operacionArchivo != null && !instruccionArchivoEjecutada; }
+    boolean debeEnviarSolicitudDisco() { return instruccionArchivoEjecutada && solicitudDisco == null; }
+    void registrarSolicitudDisco(DiskRequest solicitud) { solicitudDisco = solicitud; }
+    DiskRequest getSolicitudDisco() { return solicitudDisco; }
+
+    // Intercambio: la escritura al swap esta en curso mientras solicitudSwap no es null.
+    // La RAM se libera solo cuando esa escritura termina (enSwap pasa a true).
+    void iniciarSuspension(DiskRequest escritura) {
+        solicitudSwap = escritura;
+        eventoDuranteSuspension = false;
+    }
+
+    void completarSuspension() {
+        solicitudSwap = null;
+        enSwap = true;
+    }
+
+    /** El evento que esperaba ocurrio mientras se escribia al swap: termina en Listo/Suspendido. */
+    void registrarEventoDuranteSuspension() { eventoDuranteSuspension = true; }
+
+    // Reactivacion: la RAM ya esta reservada y se lee el swap; enSwap sigue en true hasta terminar.
+    void iniciarReactivacion(DiskRequest lectura) { solicitudReactivacion = lectura; }
+
+    void completarReactivacion() {
+        solicitudReactivacion = null;
+        enSwap = false;
+    }
+
+    boolean reactivacionEnCurso() { return solicitudReactivacion != null; }
+    DiskRequest getSolicitudReactivacion() { return solicitudReactivacion; }
+
+    boolean suspensionEnCurso() { return solicitudSwap != null; }
+    DiskRequest getSolicitudSwap() { return solicitudSwap; }
+    boolean isEventoDuranteSuspension() { return eventoDuranteSuspension; }
+    public boolean isEnSwap() { return enSwap; }
+
+    String getAvisoAdmision() { return avisoAdmision; }
+    void setAvisoAdmision(String aviso) { avisoAdmision = aviso; }
+
+    void iniciarBloqueo() { ciclosBloqueoActual = 0; }
+    /** Ciclos seguidos en el bloqueo actual; criterio para elegir la victima de suspension. */
+    public int getCiclosBloqueoActual() { return ciclosBloqueoActual; }
 
     public void decrementarDeadline() {
         if (deadline > 0) {
@@ -124,11 +191,13 @@ public class PCB {
             }
             return completo && paso == PasoProtocolo.ESPERAR_CONTEO;
         }
-        return tiempoRestante <= 0;
+        return tiempoRestante <= 0
+                && (operacionArchivo == null || solicitudDisco != null && solicitudDisco.getResult() != null);
     }
 
     public boolean debePedirES() {
         return tipo == TipoProceso.IO_BOUND
+                && operacionArchivo == null
                 && ciclosParaES > 0
                 && duracionES > 0
                 && contadorCiclosES >= ciclosParaES
@@ -225,6 +294,7 @@ public class PCB {
 
     public void sumarCicloBloqueado() {
         ciclosBloqueado++;
+        ciclosBloqueoActual++;
     }
 
     public void sumarCicloBloqueadoSemaforo() {
@@ -244,6 +314,7 @@ public class PCB {
     public int getPrioridad() { return prioridad; }
     public int getMemoria() { return memoria; }
     public int getTotalInstrucciones() { return totalInstrucciones; }
+    public OperacionArchivo getOperacionArchivo() { return operacionArchivo; }
     public EstadoProceso getEstado() { return estado; }
     public MotivoBloqueo getMotivoBloqueo() { return motivoBloqueo; }
     public MotivoTerminacion getMotivoTerminacion() { return motivoTerminacion; }

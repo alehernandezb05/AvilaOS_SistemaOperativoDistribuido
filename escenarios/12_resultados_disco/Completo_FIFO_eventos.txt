@@ -1,0 +1,58 @@
+[ciclo 0] Proceso P1 (Proc_95) creado en el computador 1 (IO_BOUND)
+[ciclo 0] Proceso P2 (Proc_180) creado en el computador 1 (IO_BOUND)
+[ciclo 0] Proceso P3 (Proc_34) creado en el computador 1 (IO_BOUND)
+[ciclo 0] Proceso P4 (Proc_119) creado en el computador 1 (IO_BOUND)
+[ciclo 0] Proceso P5 (Proc_11) creado en el computador 1 (IO_BOUND)
+[ciclo 0] Proceso P6 (Proc_123) creado en el computador 1 (IO_BOUND)
+[ciclo 0] Proceso P7 (Proc_62) creado en el computador 1 (IO_BOUND)
+[ciclo 0] Proceso P8 (Proc_64) creado en el computador 1 (IO_BOUND)
+[ciclo 1] Computador 1 admite el proceso P1 (Proc_95) (nuevo -> listo)
+[ciclo 1] Computador 1 admite el proceso P2 (Proc_180) (nuevo -> listo)
+[ciclo 1] Computador 1 admite el proceso P3 (Proc_34) (nuevo -> listo)
+[ciclo 1] Computador 1 admite el proceso P4 (Proc_119) (nuevo -> listo)
+[ciclo 1] Computador 1 admite el proceso P5 (Proc_11) (nuevo -> listo)
+[ciclo 1] Computador 1 admite el proceso P6 (Proc_123) (nuevo -> listo)
+[ciclo 1] Computador 1 admite el proceso P7 (Proc_62) (nuevo -> listo)
+[ciclo 1] Computador 1 admite el proceso P8 (Proc_64) (nuevo -> listo)
+[ciclo 1] Computador 1 selecciona el proceso P1 (Proc_95)
+[ciclo 2] Computador 1 encola solicitud 73 READ /sistema/config.sys de P1 (Proc_95) (ejecución -> bloqueado)
+[ciclo 2] Computador 1 selecciona el proceso P2 (Proc_180)
+[ciclo 3] El disco atiende la solicitud 73 READ de P1 en el bloque 95 (FIFO)
+[ciclo 3] Computador 1 encola solicitud 74 READ /usuarios/video.mp4 de P2 (Proc_180) (ejecución -> bloqueado)
+[ciclo 3] Computador 1 selecciona el proceso P3 (Proc_34)
+[ciclo 4] Computador 1 encola solicitud 75 UPDATE /usuarios/notas.txt de P3 (Proc_34) (ejecución -> bloqueado)
+[ciclo 4] Computador 1 selecciona el proceso P4 (Proc_119)
+[ciclo 5] Computador 1 encola solicitud 76 DELETE /usuarios/img1.png de P4 (Proc_119) (ejecución -> bloqueado)
+[ciclo 5] Computador 1 selecciona el proceso P5 (Proc_11)
+[ciclo 6] Computador 1 encola solicitud 77 READ /sistema/boot.bin de P5 (Proc_11) (ejecución -> bloqueado)
+[ciclo 6] Computador 1 selecciona el proceso P6 (Proc_123)
+[ciclo 7] Computador 1 encola solicitud 78 UPDATE /usuarios/data.csv de P6 (Proc_123) (ejecución -> bloqueado)
+[ciclo 7] Computador 1 selecciona el proceso P7 (Proc_62)
+[ciclo 8] Computador 1 encola solicitud 79 READ /sistema/script.py de P7 (Proc_62) (ejecución -> bloqueado)
+[ciclo 8] Computador 1 selecciona el proceso P8 (Proc_64)
+[ciclo 9] Computador 1 encola solicitud 80 READ /sistema/core.dll de P8 (Proc_64) (ejecución -> bloqueado)
+[ciclo 48] Computador 1 termina la solicitud 73 READ /sistema/config.sys de P1 (Proc_95) (bloqueado -> listo)
+[ciclo 49] El disco atiende la solicitud 74 READ de P2 en el bloque 180 (FIFO)
+[ciclo 49] Computador 1 selecciona el proceso P1 (Proc_95)
+[ciclo 50] Computador 1 termina el proceso P1 (Proc_95) y libera 16 de RAM
+[ciclo 134] Computador 1 termina la solicitud 74 READ /usuarios/video.mp4 de P2 (Proc_180) (bloqueado -> listo)
+[ciclo 135] El disco atiende la solicitud 75 UPDATE de P3 en el bloque 34 (FIFO)
+[ciclo 135] Computador 1 selecciona el proceso P2 (Proc_180)
+[ciclo 136] Computador 1 termina el proceso P2 (Proc_180) y libera 16 de RAM
+[ciclo 281] Computador 1 escribe /usuarios/notas.txt
+[ciclo 281] Computador 1 termina la solicitud 75 UPDATE /usuarios/notas.txt de P3 (Proc_34) (bloqueado -> listo)
+[ciclo 282] El disco atiende la solicitud 76 DELETE de P4 en el bloque 119 (FIFO)
+[ciclo 282] Computador 1 selecciona el proceso P3 (Proc_34)
+[ciclo 283] Computador 1 termina el proceso P3 (Proc_34) y libera 16 de RAM
+[ciclo 367] Computador 1 elimina /usuarios/img1.png y libera sus bloques
+[ciclo 367] Computador 1 termina la solicitud 76 DELETE /usuarios/img1.png de P4 (Proc_119) (bloqueado -> listo)
+[ciclo 368] El disco atiende la solicitud 77 READ de P5 en el bloque 11 (FIFO)
+[ciclo 368] Computador 1 selecciona el proceso P4 (Proc_119)
+[ciclo 369] Computador 1 termina el proceso P4 (Proc_119) y libera 16 de RAM
+[ciclo 476] Computador 1 termina la solicitud 77 READ /sistema/boot.bin de P5 (Proc_11) (bloqueado -> listo)
+[ciclo 477] El disco atiende la solicitud 78 UPDATE de P6 en el bloque 123 (FIFO)
+[ciclo 477] Computador 1 selecciona el proceso P5 (Proc_11)
+[ciclo 478] Computador 1 termina el proceso P5 (Proc_11) y libera 16 de RAM
+[ciclo 501] Computador 1 vence deadline del proceso P6 (Proc_123) en cola de bloqueados
+[ciclo 501] Computador 1 vence deadline del proceso P7 (Proc_62) en cola de bloqueados
+[ciclo 501] Computador 1 vence deadline del proceso P8 (Proc_64) en cola de bloqueados

@@ -2,6 +2,7 @@ package edu.unimet.avilaos.config;
 
 import edu.unimet.avilaos.so.PCB;
 import edu.unimet.avilaos.so.TipoProceso;
+import edu.unimet.avilaos.so.archivos.OperacionArchivo;
 
 /**
  * Datos con los que se crea un proceso de la carga inicial. Guarda lo que el
@@ -16,6 +17,7 @@ public class ConfigProceso {
     private int memoria;
     private int instrucciones;
     private int deadline;
+    private OperacionArchivo operacionArchivo;
 
     // I/O bound
     private int ciclosParaES;
@@ -36,6 +38,7 @@ public class ConfigProceso {
         c.memoria = pcb.getMemoria();
         c.instrucciones = pcb.getTotalInstrucciones();
         c.deadline = pcb.getDeadline();
+        c.operacionArchivo = pcb.getOperacionArchivo();
         c.ciclosParaES = pcb.getCiclosParaES();
         c.duracionES = pcb.getDuracionES();
         c.idBuffer = pcb.getIdBuffer();
@@ -44,9 +47,24 @@ public class ConfigProceso {
         return c;
     }
 
+    static ConfigProceso deArchivo(String nombre, int prioridad, int memoria, int instrucciones, int deadline,
+                                   OperacionArchivo operacion) {
+        ConfigProceso config = new ConfigProceso();
+        config.nombre = nombre;
+        config.computador = 1;
+        config.tipo = TipoProceso.IO_BOUND;
+        config.prioridad = prioridad;
+        config.memoria = memoria;
+        config.instrucciones = instrucciones;
+        config.deadline = deadline;
+        config.operacionArchivo = operacion;
+        return config;
+    }
+
     /** Crea el PCB de este proceso, con un ID nuevo. */
     public PCB crearPCB(long cicloCreacion) {
-        PCB pcb = new PCB(nombre, computador, tipo, prioridad, memoria, instrucciones, deadline, cicloCreacion);
+        PCB pcb = new PCB(nombre, computador, tipo, prioridad, memoria, instrucciones, deadline, cicloCreacion,
+                operacionArchivo);
         switch (tipo) {
             case IO_BOUND -> {
                 pcb.setCiclosParaES(ciclosParaES);
@@ -78,6 +96,9 @@ public class ConfigProceso {
         if (prioridad < 1 || memoria < 1 || instrucciones < 1 || deadline < 1) {
             throw new ConfiguracionInvalidaException(quien + " (" + nombre
                     + ") debe tener prioridad, memoria, instrucciones y deadline mayores a 0.");
+        }
+        if (operacionArchivo != null && tipo != TipoProceso.IO_BOUND) {
+            throw new ConfiguracionInvalidaException(quien + " tiene una operación de archivo y debe ser IO_BOUND.");
         }
         // Mismas reglas que los setters del PCB (sin crear uno, para no gastar IDs)
         boolean datosTipoValidos = switch (tipo) {

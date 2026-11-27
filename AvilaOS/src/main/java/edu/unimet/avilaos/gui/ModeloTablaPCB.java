@@ -1,5 +1,6 @@
 package edu.unimet.avilaos.gui;
 
+import edu.unimet.avilaos.so.MotivoBloqueo;
 import edu.unimet.avilaos.so.PCB;
 import javax.swing.table.AbstractTableModel;
 
@@ -10,20 +11,33 @@ import javax.swing.table.AbstractTableModel;
 public class ModeloTablaPCB extends AbstractTableModel {
 
     static final String[] COLUMNAS = {
-        "ID", "Nombre", "Tipo", "Estado", "Prioridad", "Memoria", "Deadline", "Restante", "PC", "Motivo"
+        "ID", "Nombre", "Tipo", "Estado", "Prioridad", "Memoria", "Deadline", "Restante", "PC", "Motivo",
+        "Operación", "Ruta"
     };
 
-    private PCB[] procesos = new PCB[0];
+    private Object[][] filas = new Object[0][];
 
     /** Reemplaza las filas y avisa a la tabla para que se repinte. */
     public void setProcesos(PCB[] procesos) {
-        this.procesos = procesos;
+        setFilas(copiar(procesos));
+    }
+
+    static Object[][] copiar(PCB[] procesos) {
+        Object[][] copia = new Object[procesos.length][COLUMNAS.length];
+        for (int i = 0; i < procesos.length; i++) {
+            for (int j = 0; j < COLUMNAS.length; j++) copia[i][j] = valor(procesos[i], j);
+        }
+        return copia;
+    }
+
+    void setFilas(Object[][] nuevas) {
+        filas = nuevas;
         fireTableDataChanged();
     }
 
     @Override
     public int getRowCount() {
-        return procesos.length;
+        return filas.length;
     }
 
     @Override
@@ -38,7 +52,10 @@ public class ModeloTablaPCB extends AbstractTableModel {
 
     @Override
     public Object getValueAt(int fila, int columna) {
-        PCB p = procesos[fila];
+        return filas[fila][columna];
+    }
+
+    private static Object valor(PCB p, int columna) {
         return switch (columna) {
             case 0 -> "P" + p.getId();
             case 1 -> p.getNombre();
@@ -49,7 +66,10 @@ public class ModeloTablaPCB extends AbstractTableModel {
             case 6 -> p.getDeadline();
             case 7 -> p.getTiempoRestante();
             case 8 -> p.getProgramCounter();
-            case 9 -> p.getMotivoBloqueo() == null ? "" : p.getMotivoBloqueo();
+            case 9 -> p.getMotivoBloqueo() == MotivoBloqueo.ESPERA_DISCO ? "E/S de disco"
+                    : p.getMotivoBloqueo() == null ? p.getMotivoTerminacion() : p.getMotivoBloqueo();
+            case 10 -> p.getOperacionArchivo() == null ? "" : p.getOperacionArchivo().tipo();
+            case 11 -> p.getOperacionArchivo() == null ? "" : p.getOperacionArchivo().ruta();
             default -> "";
         };
     }

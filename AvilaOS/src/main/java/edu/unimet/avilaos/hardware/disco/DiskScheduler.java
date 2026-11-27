@@ -1,0 +1,469 @@
+package edu.unimet.avilaos.hardware.disco;
+
+import edu.unimet.avilaos.estructuras.Cola;
+import edu.unimet.avilaos.estructuras.Lista;
+import edu.unimet.avilaos.hardware.ComponenteReloj;
+import edu.unimet.avilaos.hardware.disco.DiskStorage.InitialFile;
+import edu.unimet.avilaos.hardware.disco.enums.DiskDirection;
+import edu.unimet.avilaos.hardware.disco.enums.DiskOperation;
+import edu.unimet.avilaos.hardware.disco.enums.DiskPolicy;
+import edu.unimet.avilaos.hardware.disco.interfaces.IDiskSchedulerPolicy;
+import edu.unimet.avilaos.hardware.disco.interfaces.IDiskSchedulerPolicy.Sweep;
+import edu.unimet.avilaos.so.Log;
+import java.util.concurrent.Semaphore;
+
+/** Motor de disco: una solicitud activa y una transferencia de bloque por ciclo. */
+public class DiskScheduler implements ComponenteReloj {
+
+    public static final int MAX_BLOCKS = 500;
+    private final DiskStorage storage;
+    private final int initialHead;
+    private final int swapSizeBlocks;
+    private final Lista<DiskRequest> requestQueue = new Lista<>();
+    // Buzon de resultados; no es otra cola de planificacion de E/S.
+    private final Cola<DiskCompletion> completions = new Cola<>();
+    private final Semaphore mutex = new Semaphore(1);
+    private final long[] servedByPolicy = new long[DiskPolicy.values().length];
+    private long currentCycle;
+    private int currentHead;
+    private int speed;
+    private DiskDirection currentDirection = DiskDirection.UP;
+    private IDiskSchedulerPolicy activePolicy;
+    private DiskRequest currentRequest;
+    private DiskPolicy selectedPolicy;
+    private int blockIndex;
+    private int sweepReturnTarget = -1;
+    private DiskPolicy returnPolicy;
+    // Retenido, el disco termina lo que tiene en curso y solo atiende swap; las operaciones de archivo esperan.
+    private boolean held;
+    private long totalHeadMovement;
+    private long totalRequestsServed;
+    private long totalWaitCycles;
+    private long totalReturnCycles;
+    private final long[] waitByPolicy = new long[DiskPolicy.values().length];
+    private volatile Log log;
+
+    public DiskScheduler(int totalBlocks, int initialHead, int swapSizeBlocks, DiskPolicy policy) {
+        this(totalBlocks, initialHead, swapSizeBlocks, 1, DiskPolicies.create(policy));
+    }
+
+    public DiskScheduler(int totalBlocks, int initialHead, int swapSizeBlocks,
+                         int speed, IDiskSchedulerPolicy policy) {
+        this(totalBlocks, initialHead, swapSizeBlocks, speed, policy, new InitialFile[0]);
+    }
+
+    public DiskScheduler(int totalBlocks, int initialHead, int swapSizeBlocks,
+                         int speed, IDiskSchedulerPolicy policy, InitialFile... initialFiles) {
+        if (totalBlocks < 1 || totalBlocks > MAX_BLOCKS) {
+            throw new IllegalArgumentException("El disco debe tener entre 1 y " + MAX_BLOCKS + " bloques.");
+        }
+        if (initialHead < 0 || initialHead >= totalBlocks) {
+            throw new IllegalArgumentException("El cabezal inicial esta fuera del disco.");
+        }
+        if (swapSizeBlocks < 0 || swapSizeBlocks > totalBlocks) {
+            throw new IllegalArgumentException("El tamano de swap debe estar entre 0 y el total de bloques.");
+        }
+        validatePolicy(policy);
+        validateSpeed(speed, totalBlocks);
+        this.initialHead = initialHead;
+        this.currentHead = initialHead;
+        this.swapSizeBlocks = swapSizeBlocks;
+        this.speed = speed;
+        this.activePolicy = policy;
+        this.storage = new DiskStorage(totalBlocks, swapSizeBlocks, initialFiles);
+    }
+
+    private static void validatePolicy(IDiskSchedulerPolicy policy) {
+        if (policy == null || policy.getPolicy() == null) {
+            throw new IllegalArgumentException("Falta una estrategia de planificacion valida.");
+        }
+    }
+
+    private static void validateSpeed(int speed, int totalBlocks) {
+        if (speed < 1 || speed > totalBlocks) {
+            throw new IllegalArgumentException("La velocidad debe estar entre 1 y el total de bloques.");
+        }
+    }
+
+    public void setPolicy(DiskPolicy policy) { setPolicy(DiskPolicies.create(policy)); }
+
+    public void setPolicy(IDiskSchedulerPolicy policy) {
+        validatePolicy(policy);
+        mutex.acquireUninterruptibly();
+        try {
+            activePolicy = policy;
+        } finally {
+            mutex.release();
+        }
+    }
+
+    /**
+     * Retener deja que las solicitudes se acumulen en la cola sin atenderlas; al soltar, la política elige entre
+     * todas. Sirve para ver el orden de una política con la cola completa, como en los casos de prueba.
+     */
+    public void setHeld(boolean held) {
+        mutex.acquireUninterruptibly();
+        try {
+            this.held = held;
+        } finally {
+            mutex.release();
+        }
+    }
+
+    public boolean isHeld() {
+        mutex.acquireUninterruptibly();
+        try {
+            return held;
+        } finally {
+            mutex.release();
+        }
+    }
+
+    public void setSpeed(int speed) {
+        validateSpeed(speed, getTotalBlocks());
+        mutex.acquireUninterruptibly();
+        try {
+            this.speed = speed;
+        } finally {
+            mutex.release();
+        }
+    }
+
+    /** False si el hilo fue interrumpido antes de adquirir el semaforo; se puede reintentar. */
+    public boolean addRequest(DiskRequest request) {
+        if (request == null) throw new IllegalArgumentException("Falta la solicitud.");
+        for (int block : request.getBlockNumbers()) {
+            if (block >= getTotalBlocks()) throw new IllegalArgumentException("La solicitud sale del disco.");
+        }
+        try {
+            mutex.acquire();
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return false;
+        }
+        try {
+            request.enqueue(currentCycle);
+            requestQueue.agregar(request);
+            return true;
+        } finally {
+            mutex.release();
+        }
+    }
+
+    @Override
+    public void alCiclo(long cycle) {
+        try {
+            mutex.acquire();
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return;
+        }
+        
+        long previousCycle = currentCycle;
+try {
+    if (cycle <= currentCycle) return;
+    currentCycle = cycle;
+            if (sweepReturnTarget >= 0) {
+                advanceSweepReturn();
+                return;
+            }
+            if (currentRequest == null) {
+                if (requestQueue.estaVacia()) return;
+                currentRequest = held ? takeSwapRequest()
+                        : activePolicy.selectNextRequest(requestQueue, currentHead, currentDirection);
+                if (currentRequest == null && held) return;
+                if (currentRequest == null) {
+                    advanceSweep();
+                    return;
+                }
+                currentRequest.start(cycle);
+                selectedPolicy = activePolicy.getPolicy();
+                Log eventos = log;
+                if (eventos != null) {
+                    String destino = currentRequest.getBlockCount() == 0 ? " para metadatos"
+                            : " en el bloque " + currentRequest.getBlockNumber();
+                    eventos.registrar(cycle, "El disco atiende la solicitud " + currentRequest.getId() + " "
+                            + currentRequest.getOperation() + " de P" + currentRequest.getProcessId()
+                            + destino + " (" + selectedPolicy + ")");
+                }
+                blockIndex = 0;
+            }
+            if (currentRequest.getBlockCount() > 0) {
+                int target = currentRequest.blockAt(blockIndex);
+                if (currentHead != target) {
+                    totalHeadMovement += moveHeadToward(target);
+                    return; // La transferencia ocupa otro ciclo, incluso si acaba de llegar.
+                }
+                blockIndex++;
+            }
+            if (blockIndex == currentRequest.getBlockCount()) {
+                completions.encolar(currentRequest.complete(cycle, selectedPolicy));
+                long waitCycles = currentRequest.getStartCycle()
+        - currentRequest.getArrivalCycle();
+
+totalWaitCycles += waitCycles;
+waitByPolicy[selectedPolicy.ordinal()] += waitCycles;
+                totalRequestsServed++;
+                servedByPolicy[selectedPolicy.ordinal()]++;
+                currentRequest = null;
+            }
+                } finally {
+            try {
+                if (currentCycle > previousCycle) {
+                    recordMovement();
+                }
+            } finally {
+                mutex.release();
+            }
+        }
+    }
+    public void cancelRequest(DiskRequest request) {
+        if (request == null) {
+            return;
+        }
+
+        mutex.acquireUninterruptibly();
+        try {
+            if (currentRequest == request) {
+                request.cancel();
+                currentRequest = null;
+                blockIndex = 0;
+                selectedPolicy = null;
+            } else if (requestQueue.remover(request)) {
+                request.cancel();
+            }
+        } finally {
+            mutex.release();
+        }
+    }
+    private void advanceSweep() {
+        Sweep sweep = activePolicy.sweepWithoutRequest(getTotalBlocks() - 1, currentDirection);
+        if (sweep == null) return;
+        boolean alreadyAtTarget = currentHead == sweep.targetBlock();
+        if (!alreadyAtTarget) totalHeadMovement += moveHeadToward(sweep.targetBlock());
+        if (currentHead != sweep.targetBlock()) return;
+        if (sweep.returnBlock() >= 0) {
+            sweepReturnTarget = sweep.returnBlock();
+            returnPolicy = activePolicy.getPolicy();
+            registrarEvento("El disco llega al extremo " + currentHead + " y regresa al bloque " + sweepReturnTarget
+                    + " sin atender solicitudes (" + activePolicy.getPolicy() + ")");
+            if (alreadyAtTarget) advanceSweepReturn();
+        } else if (currentDirection != sweep.directionOnArrival()) {
+            DiskDirection previousDirection = currentDirection;
+            currentDirection = sweep.directionOnArrival();
+            registrarEvento("El disco llega al extremo " + currentHead + " y cambia de " + previousDirection
+                    + " a " + currentDirection + " (" + activePolicy.getPolicy() + ")");
+        }
+    }
+
+    // El retorno circular ocupa ciclos a la velocidad del disco y prolonga la espera.
+    // Durante este trayecto no se seleccionan solicitudes ni se acumula desplazamiento.
+    private void advanceSweepReturn() {
+    if (currentHead != sweepReturnTarget) {
+        moveHeadToward(sweepReturnTarget);
+        totalReturnCycles++;
+    }
+
+    if (currentHead == sweepReturnTarget) {
+        registrarEvento("El disco termina el retorno en el bloque " + currentHead + " (" + returnPolicy + ")");
+        sweepReturnTarget = -1;
+        // El barrido circular siempre sigue hacia los bloques mayores.
+        currentDirection = DiskDirection.UP;
+    }
+}
+
+    /** Retenido solo se atiende swap, en orden de llegada: suspender o reactivar no debe esperar al administrador. */
+    private DiskRequest takeSwapRequest() {
+        for (int i = 0; i < requestQueue.getTamano(); i++) {
+            DiskRequest request = requestQueue.obtener(i);
+            if (request.getOperation() == DiskOperation.SUSPEND || request.getOperation() == DiskOperation.REACTIVATE) {
+                requestQueue.remover(request);
+                return request;
+            }
+        }
+        return null;
+    }
+
+    /** Las decisiones del disco van al mismo log de eventos que ve el usuario. */
+    private void registrarEvento(String mensaje) {
+        Log eventos = log;
+        if (eventos != null) eventos.registrar(currentCycle, mensaje);
+    }
+
+    private int moveHeadToward(int target) {
+        int distance = Math.min(speed, Math.abs(target - currentHead));
+        currentDirection = target > currentHead ? DiskDirection.UP : DiskDirection.DOWN;
+        currentHead += currentDirection == DiskDirection.UP ? distance : -distance;
+        return distance;
+    }
+
+    /** Cada finalizacion se entrega una vez; el consumidor resuelve el PCB fuera del semaforo. */
+    public DiskCompletion pollCompleted() {
+        mutex.acquireUninterruptibly();
+        try {
+            return completions.desencolar();
+        } finally {
+            mutex.release();
+        }
+    }
+
+    public DiskSnapshot getSnapshot() {
+        mutex.acquireUninterruptibly();
+        try {
+            return snapshot();
+        } finally {
+            mutex.release();
+        }
+    }
+
+    /** Estado y cola copiados bajo el mismo semaforo; la solicitud activa va primero. */
+    public DiskQueueView getQueueView() {
+        mutex.acquireUninterruptibly();
+        try {
+            int offset = currentRequest == null ? 0 : 1;
+            DiskQueueEntry[] entries = new DiskQueueEntry[offset + requestQueue.getTamano()];
+            if (currentRequest != null) entries[0] = entry(currentRequest, true);
+            for (int i = 0; i < requestQueue.getTamano(); i++) {
+                entries[offset + i] = entry(requestQueue.obtener(i), false);
+            }
+            return new DiskQueueView(snapshot(), entries);
+        } finally {
+            mutex.release();
+        }
+    }
+
+    private DiskSnapshot snapshot() {
+        return new DiskSnapshot(currentCycle, currentHead, currentDirection,
+                activePolicy.getPolicy(), speed, totalHeadMovement, totalRequestsServed,
+                currentRequest == null ? -1 : currentRequest.getId(),
+                activeTarget(), requestQueue.getTamano());
+    }
+
+    private int activeTarget() {
+        return currentRequest == null || currentRequest.getBlockCount() == 0
+                ? -1 : currentRequest.blockAt(blockIndex);
+    }
+
+    private DiskQueueEntry entry(DiskRequest request, boolean active) {
+        int target = active ? activeTarget() : request.getBlockCount() == 0 ? -1 : request.blockAt(0);
+        return new DiskQueueEntry(request.getId(), request.getProcessId(), request.getProcessName(),
+                request.getOperation(), target, request.getBlockCount(), request.getArrivalCycle(), active);
+    }
+
+    public DiskRequest[] getPendingRequests() {
+        mutex.acquireUninterruptibly();
+        try {
+            DiskRequest[] copy = new DiskRequest[requestQueue.getTamano()];
+            for (int i = 0; i < copy.length; i++) copy[i] = requestQueue.obtener(i);
+            return copy;
+        } finally {
+            mutex.release();
+        }
+    }
+
+    /** Copia del mapa con bloques inmutables para los observadores. */
+    public DiskBlock[] getBlocks() {
+        return storage.getBlocks();
+    }
+
+    public long getServedCount(DiskPolicy policy) {
+        if (policy == null) throw new IllegalArgumentException("Falta la politica.");
+        mutex.acquireUninterruptibly();
+        try {
+            return servedByPolicy[policy.ordinal()];
+        } finally {
+            mutex.release();
+        }
+    }
+
+        public double getAverageWaitCycles() {
+        mutex.acquireUninterruptibly();
+        try {
+            return totalRequestsServed == 0 ? 0.0
+                    : (double) totalWaitCycles / totalRequestsServed;
+        } finally {
+            mutex.release();
+        }
+    }
+
+    public double getAverageWaitCycles(DiskPolicy policy) {
+        if (policy == null) {
+            throw new IllegalArgumentException("Falta la politica.");
+        }
+
+        mutex.acquireUninterruptibly();
+        try {
+            int index = policy.ordinal();
+            return servedByPolicy[index] == 0 ? 0.0
+                    : (double) waitByPolicy[index] / servedByPolicy[index];
+        } finally {
+            mutex.release();
+        }
+    }
+    /** Desplazamiento acumulado al cerrar un ciclo, con la política que estaba activa. */
+    public record MovementSample(long cycle, long movement, DiskPolicy policy) {
+    }
+
+    private MovementSample[] movementHistory =
+            new MovementSample[128];
+
+    private int movementHistorySize;
+
+    private void recordMovement() {
+        if (movementHistorySize == movementHistory.length) {
+            MovementSample[] expanded =
+                    new MovementSample[movementHistory.length * 2];
+
+            System.arraycopy(movementHistory, 0, expanded,
+                    0, movementHistorySize);
+
+            movementHistory = expanded;
+        }
+
+        movementHistory[movementHistorySize++] =
+                new MovementSample(currentCycle, totalHeadMovement, policyMovingHead());
+    }
+
+    /** El tramo lo mueve la política que eligió la solicitud en curso o empezó el retorno, no la recién elegida. */
+    private DiskPolicy policyMovingHead() {
+        if (sweepReturnTarget >= 0) return returnPolicy;
+        return currentRequest != null ? selectedPolicy : activePolicy.getPolicy();
+    }
+
+    public MovementSample[] getMovementHistory(int fromIndex) {
+        mutex.acquireUninterruptibly();
+        try {
+            if (fromIndex < 0 || fromIndex > movementHistorySize) {
+                throw new IllegalArgumentException("Indice invalido.");
+            }
+
+            MovementSample[] copy =
+                    new MovementSample[movementHistorySize - fromIndex];
+
+            System.arraycopy(movementHistory, fromIndex,
+                    copy, 0, copy.length);
+
+            return copy;
+        } finally {
+            mutex.release();
+        }
+    }    
+    public long getTotalReturnCycles() {
+        mutex.acquireUninterruptibly();
+        try {
+            return totalReturnCycles;
+        } finally {
+            mutex.release();
+        }
+    }
+    public DiskStorage getStorage() { return storage; }
+    public void setLog(Log log) { this.log = log; }
+    public int getTotalBlocks() { return storage.getTotalBlocks(); }
+    public int getInitialHead() { return initialHead; }
+    public int getSwapSizeBlocks() { return swapSizeBlocks; }
+    public int getCurrentHead() { return getSnapshot().currentHead(); }
+    public DiskDirection getCurrentDirection() { return getSnapshot().direction(); }
+    public DiskPolicy getActivePolicyEnum() { return getSnapshot().policy(); }
+    public long getTotalHeadMovement() { return getSnapshot().totalHeadMovement(); }
+    public long getTotalRequestsServed() { return getSnapshot().totalRequestsServed(); }
+}

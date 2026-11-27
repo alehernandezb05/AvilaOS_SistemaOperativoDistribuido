@@ -1,6 +1,12 @@
 package edu.unimet.avilaos.cluster;
 
 import edu.unimet.avilaos.config.ConfigProceso;
+import edu.unimet.avilaos.config.ConfigDisco;
+import edu.unimet.avilaos.hardware.disco.DiskScheduler;
+import edu.unimet.avilaos.hardware.disco.DiskPolicies;
+import edu.unimet.avilaos.hardware.disco.DiskSnapshot;
+import edu.unimet.avilaos.hardware.disco.DiskStorage.InitialFile;
+import edu.unimet.avilaos.hardware.disco.enums.DiskPolicy;
 import edu.unimet.avilaos.config.Configuracion;
 import edu.unimet.avilaos.config.Configuracion.ConfigBuffer;
 import edu.unimet.avilaos.config.Configuracion.ConfigComputador;
@@ -12,10 +18,14 @@ import edu.unimet.avilaos.so.Log;
 import edu.unimet.avilaos.so.PCB;
 import edu.unimet.avilaos.so.PoliticaPlanificacion;
 import edu.unimet.avilaos.so.ServicioCluster;
+import edu.unimet.avilaos.so.archivos.OperacionArchivo;
+import edu.unimet.avilaos.so.archivos.SesionUsuario;
+import edu.unimet.avilaos.so.archivos.SistemaArchivos;
 import edu.unimet.avilaos.so.politicas.EDF;
 import edu.unimet.avilaos.so.politicas.FCFS;
 import edu.unimet.avilaos.so.politicas.PrioridadesApropiativas;
 import edu.unimet.avilaos.so.politicas.RoundRobin;
+import java.util.function.Supplier;
 
 /**
  * Arma el sistema distribuido: el reloj global y los computadores del cluster.
@@ -23,11 +33,14 @@ import edu.unimet.avilaos.so.politicas.RoundRobin;
  */
 public class Simulador implements ServicioCluster {
 
-    public static final int MIN_COMPUTADORES = 2;
+    public static final int MIN_COMPUTADORES = 1;
 
     private final Reloj reloj;
     private final Computador[] computadores;
+    private final SistemaArchivos sistemaArchivos;
+    private final boolean procesosCargados;
     private final Log log = new Log();
+    private volatile SesionUsuario sesion = SesionUsuario.administrador();
     private final int latenciaRed;       // ciclos que cuesta cada acceso a un buffer remoto
     // Datos con los que se creo cada proceso, para guardarlos como carga inicial
     private final Lista<ConfigProceso> procesosCreados = new Lista<>();
@@ -41,8 +54,13 @@ public class Simulador implements ServicioCluster {
      * guardaron) y despues los procesos que los usan.
      */
     public Simulador(Configuracion config) {
+        this(config, null);
+    }
+
+    public Simulador(Configuracion config, SistemaArchivos sistemaArchivos) {
         this(config.getDuracionCicloMs(), config.getQuantum(), config.getLatenciaRed(),
-                config.getTamanosRam(), config.getPoliticas());
+                config.getTamanosRam(), config.getPoliticas(), config.getDisco(), sistemaArchivos,
+                config.tieneCargaProcesos());
         for (ConfigBuffer buffer : config.getBuffers()) {
             crearBuffer(buffer.getCapacidad(), buffer.getAnfitrion());
         }
@@ -61,25 +79,46 @@ public class Simulador implements ServicioCluster {
      */
     public Simulador(int duracionCicloMs, int quantum, int latenciaRed, int[] tamanosRam,
                      PoliticaPlanificacion[] politicas) {
-        if (tamanosRam.length < MIN_COMPUTADORES) {
-            throw new IllegalArgumentException("Se necesitan al menos " + MIN_COMPUTADORES + " computadores.");
+        this(duracionCicloMs, quantum, latenciaRed, tamanosRam, politicas, new ConfigDisco());
+    }
+
+    public Simulador(int duracionCicloMs, int quantum, int latenciaRed, int[] tamanosRam,
+                     PoliticaPlanificacion[] politicas, ConfigDisco configDisco) {
+        this(duracionCicloMs, quantum, latenciaRed, tamanosRam, politicas, configDisco, null, false);
+    }
+
+    private Simulador(int duracionCicloMs, int quantum, int latenciaRed, int[] tamanosRam,
+                      PoliticaPlanificacion[] politicas, ConfigDisco configDisco, SistemaArchivos sistemaArchivos,
+                      boolean procesosCargados) {
+        if (tamanosRam.length != MIN_COMPUTADORES) {
+            throw new IllegalArgumentException("El Proyecto 2 requiere exactamente un computador.");
         }
         if (politicas.length != tamanosRam.length) {
             throw new IllegalArgumentException("Debe haber una politica por computador.");
         }
-        if (quantum <= 0) {
-            throw new IllegalArgumentException("El quantum debe ser mayor a 0.");
+        if (quantum < Configuracion.MIN_QUANTUM || quantum > Configuracion.MAX_QUANTUM) {
+            throw new IllegalArgumentException("El quantum debe estar entre 0 y " + Configuracion.MAX_QUANTUM + ".");
         }
         if (latenciaRed < 0) {
             throw new IllegalArgumentException("La latencia de red no puede ser negativa.");
         }
         this.quantum = quantum;
         this.latenciaRed = latenciaRed;
+        this.sistemaArchivos = sistemaArchivos == null ? null : sistemaArchivos.copia();
+        this.procesosCargados = procesosCargados;
         this.reloj = new Reloj(duracionCicloMs);
         this.computadores = new Computador[tamanosRam.length];
+        int bloques = sistemaArchivos == null ? configDisco.getTotalBlocks() : sistemaArchivos.bloquesDisco();
+        int cabezal = sistemaArchivos == null ? configDisco.getInitialHead() : sistemaArchivos.cabezalInicial();
+        InitialFile[] archivos = this.sistemaArchivos == null ? new InitialFile[0] : this.sistemaArchivos.archivosIniciales();
+        // El JSON de procesos aporta swap y velocidad; la vista previa solo usa la geometría cargada.
+        boolean vistaPreviaArchivos = sistemaArchivos != null && !procesosCargados;
+        DiskScheduler disco = new DiskScheduler(bloques, cabezal, vistaPreviaArchivos ? 0 : configDisco.getSwapSizeBlocks(),
+                vistaPreviaArchivos ? 1 : configDisco.getHeadSpeed(), DiskPolicies.create(configDisco.getInitialPolicy()), archivos);
         // Los IDs de los computadores empiezan en 1; todos comparten el mismo log global
         for (int i = 0; i < tamanosRam.length; i++) {
-            computadores[i] = new Computador(i + 1, tamanosRam[i], crearEstrategia(politicas[i], quantum), reloj);
+            computadores[i] = new Computador(i + 1, tamanosRam[i], crearEstrategia(politicas[i], quantum), reloj,
+                    disco, this.sistemaArchivos);
             computadores[i].setLog(log);
             computadores[i].setServicio(this);
         }
@@ -97,12 +136,21 @@ public class Simulador implements ServicioCluster {
 
     /** Arranca el reloj la primera vez; despues solo lo reanuda. */
     public synchronized void iniciar() {
+        String impedimento = impedimentoInicio();
+        if (impedimento != null) throw new IllegalStateException(impedimento);
         if (!iniciado) {
             reloj.iniciar();
             iniciado = true;
         } else {
             reloj.reanudar();
         }
+    }
+
+    public String impedimentoInicio() {
+        if (sistemaArchivos == null && !procesosCargados) return "Carga ambos JSON para iniciar.";
+        if (sistemaArchivos == null) return "Falta el JSON del sistema de archivos.";
+        if (!procesosCargados) return "Falta el JSON de procesos.";
+        return null;
     }
 
     public void pausar() {
@@ -113,7 +161,26 @@ public class Simulador implements ServicioCluster {
         reloj.detener();
     }
 
+    /** Copia valores del modelo entre ciclos, sin trabajo Swing bajo el semaforo. */
+    public <T> T intentarObservar(Supplier<T> observacion) {
+        return reloj.intentarObservar(observacion);
+    }
+
+    /** Operacion breve del modelo; no llamar otra operacion que tome el reloj desde aqui. */
+    public <T> T observar(Supplier<T> observacion) {
+        return reloj.entreCiclos(observacion);
+    }
+
+    public SistemaArchivos copiaSistemaArchivos() {
+        // El cabezal también es parte del estado del disco que se conserva al guardar o recargar procesos.
+        return observar(() -> sistemaArchivos == null ? null : sistemaArchivos.copia(getDisco().getCurrentHead()));
+    }
+
     public void agregarProceso(PCB proceso) {
+        observar(() -> { agregarProcesoInterno(proceso); return null; });
+    }
+
+    private void agregarProcesoInterno(PCB proceso) {
         getComputador(proceso.getIdComputador()).agregarProceso(proceso);
         synchronized (procesosCreados) {
             procesosCreados.agregar(ConfigProceso.desde(proceso));
@@ -122,14 +189,84 @@ public class Simulador implements ServicioCluster {
                 + proceso.getIdComputador() + " (" + proceso.getTipo() + ")");
     }
 
+    /**
+     * Proceso pedido desde la interfaz: se valida con el modo de uso actual antes de crearlo.
+     * Un rechazo se registra, no crea el proceso y la simulacion sigue.
+     */
+    public void solicitarProceso(PCB proceso) {
+        observar(() -> { solicitarProcesoInterno(proceso); return null; });
+    }
+
+    private void solicitarProcesoInterno(PCB proceso) {
+        SesionUsuario actual = sesion;
+        OperacionArchivo operacion = proceso.getOperacionArchivo();
+        try {
+            if (operacion == null) {
+                exigirAdministrador("crear procesos que no son de archivos");
+            } else {
+                if (!actual.solicitante().equals(operacion.solicitante())) {
+                    throw new IllegalArgumentException("la operación debe pedirla " + actual.solicitante() + ".");
+                }
+                if (sistemaArchivos == null) throw new IllegalArgumentException("falta cargar el sistema de archivos.");
+                sistemaArchivos.comprobarPermiso(operacion);
+            }
+        } catch (IllegalArgumentException e) {
+            String que = operacion == null ? "el proceso " + proceso.getNombre()
+                    : operacion.tipo() + " " + operacion.ruta();
+            log.registrar(getCicloActual(), "Se rechaza " + que + " en modo " + actual + ": " + e.getMessage());
+            throw e;
+        }
+        agregarProcesoInterno(proceso);
+    }
+
+    public SesionUsuario getSesion() { return sesion; }
+
+    public void setSesion(SesionUsuario nueva) {
+        observar(() -> { setSesionInterno(nueva); return null; });
+    }
+
+    private void setSesionInterno(SesionUsuario nueva) {
+        if (nueva == null) throw new IllegalArgumentException("Falta el modo de uso.");
+        if (nueva.equals(sesion)) return;
+        sesion = nueva;
+        log.registrar(getCicloActual(), "Cambia el modo de uso a " + nueva);
+        // Un usuario no puede soltar el disco: si quedó retenido, se suelta para que sus procesos avancen.
+        DiskScheduler disco = getDisco();
+        if (!nueva.esAdministrador() && disco != null && disco.isHeld()) {
+            disco.setHeld(false);
+            log.registrar(getCicloActual(), "Se suelta el disco al salir del modo administrador");
+        }
+    }
+
+    /** Las politicas y el quantum los gestiona el administrador; tambien se valida aqui, no solo en la interfaz. */
+    private void exigirAdministrador(String accion) {
+        if (!sesion.esAdministrador()) {
+            throw new IllegalArgumentException("En modo usuario no se puede " + accion + ".");
+        }
+    }
+
     public void cambiarPolitica(int idComputador, PoliticaPlanificacion politica) {
+        observar(() -> { cambiarPoliticaInterno(idComputador, politica); return null; });
+    }
+
+    private void cambiarPoliticaInterno(int idComputador, PoliticaPlanificacion politica) {
+        exigirAdministrador("cambiar la política de CPU");
         getComputador(idComputador).cambiarPolitica(crearEstrategia(politica, quantum));
     }
 
     /** Cambia el quantum en caliente; afecta a los computadores que ya usan Round Robin. */
     public void setQuantum(int quantum) {
-        if (quantum <= 0) {
-            return;
+        observar(() -> { setQuantumInterno(quantum); return null; });
+    }
+
+    private void setQuantumInterno(int quantum) {
+        exigirAdministrador("cambiar el quantum");
+        if (quantum < Configuracion.MIN_QUANTUM || quantum > Configuracion.MAX_QUANTUM) {
+            throw new IllegalArgumentException("El quantum debe estar entre 0 y " + Configuracion.MAX_QUANTUM + ".");
+        }
+        if (quantum == 0 && computadores[0].getNucleo().getEstrategia().getPolitica()
+                == PoliticaPlanificacion.ROUND_ROBIN) {
+            throw new IllegalArgumentException("Round Robin necesita un quantum mayor a 0.");
         }
         this.quantum = quantum;
         for (Computador c : computadores) {
@@ -140,7 +277,7 @@ public class Simulador implements ServicioCluster {
     }
 
     public void setDuracionCicloMs(int ms) {
-        reloj.setDuracionCicloMs(ms);
+        observar(() -> { reloj.setDuracionCicloMs(ms); return null; });
     }
 
     /** Devuelve el computador con ese ID (de 1 a la cantidad de computadores). */
@@ -156,6 +293,10 @@ public class Simulador implements ServicioCluster {
      * y los buffers y procesos creados hasta ahora como carga inicial, para guardarlos.
      */
     public Configuracion getConfiguracion() {
+        return observar(this::copiarConfiguracion);
+    }
+
+    private Configuracion copiarConfiguracion() {
         Buffer[] existentes = getBuffers();
         ConfigBuffer[] datosBuffers = new ConfigBuffer[existentes.length];
         for (int i = 0; i < existentes.length; i++) {
@@ -173,7 +314,13 @@ public class Simulador implements ServicioCluster {
                 procesos[i] = procesosCreados.obtener(i);
             }
         }
-        return new Configuracion(getDuracionCicloMs(), quantum, latenciaRed, datos, datosBuffers, procesos);
+        Configuracion config = new Configuracion(getDuracionCicloMs(), quantum, latenciaRed, datos, datosBuffers, procesos);
+        DiskScheduler disco = getDisco();
+        DiskSnapshot estado = disco.getSnapshot();
+        config.setDisco(new ConfigDisco(disco.getTotalBlocks(), disco.getInitialHead(), disco.getSwapSizeBlocks(),
+                estado.speed(), estado.policy()));
+        config.conservarCargaProcesos(procesosCargados);
+        return config;
     }
 
     @Override
@@ -244,10 +391,44 @@ public class Simulador implements ServicioCluster {
         return ids;
     }
 
+    public DiskScheduler getDisco() { return computadores[0].getDisco(); }
+    public SistemaArchivos getSistemaArchivos() { return sistemaArchivos; }
+    public void cambiarPoliticaDisco(DiskPolicy politica) {
+        observar(() -> { cambiarPoliticaDiscoInterno(politica); return null; });
+    }
+
+    private void cambiarPoliticaDiscoInterno(DiskPolicy politica) {
+        exigirAdministrador("cambiar la política de disco");
+        getDisco().setPolicy(politica);
+    }
+
+    public void setVelocidadDisco(int velocidad) {
+        observar(() -> { setVelocidadDiscoInterno(velocidad); return null; });
+    }
+
+    private void setVelocidadDiscoInterno(int velocidad) {
+        exigirAdministrador("cambiar la velocidad del disco");
+        getDisco().setSpeed(velocidad);
+    }
+
+    /** Retiene o suelta el disco; solo el administrador, igual que la política. */
+    public void setDiscoRetenido(boolean retenido) {
+        observar(() -> { setDiscoRetenidoInterno(retenido); return null; });
+    }
+
+    private void setDiscoRetenidoInterno(boolean retenido) {
+        exigirAdministrador(retenido ? "retener el disco" : "soltar el disco");
+        DiskScheduler disco = getDisco();
+        if (disco.isHeld() == retenido) return;
+        disco.setHeld(retenido);
+        log.registrar(getCicloActual(), retenido ? "Se retiene el disco: las solicitudes esperan en la cola"
+                : "Se suelta el disco con " + disco.getSnapshot().pendingCount() + " solicitudes en cola");
+    }
+
     public Log getLog() { return log; }
     public int getCantidadComputadores() { return computadores.length; }
     public int getQuantum() { return quantum; }
     public long getCicloActual() { return reloj.getCicloActual(); }
     public int getDuracionCicloMs() { return reloj.getDuracionCicloMs(); }
-    public boolean estaCorriendo() { return iniciado && !reloj.estaPausado(); }
+    public boolean estaCorriendo() { return reloj.estaCorriendo(); }
 }

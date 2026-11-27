@@ -1,0 +1,21 @@
+{
+  "duracionCicloMs": 100,
+  "quantum": 0,
+  "latenciaRed": 0,
+  "disco": {
+    "totalBlocks": 200,
+    "initialHead": 50,
+    "swapSizeBlocks": 100,
+    "headSpeed": 10,
+    "initialPolicy": "FIFO"
+  },
+  "computadores": [{"ram": 32, "politica": "FCFS"}],
+  "procesos": [
+    {"nombre": "A_E/S", "computador": 1, "tipo": "IO_BOUND", "prioridad": 1,
+      "memoria": 16, "instrucciones": 2, "deadline": 5000, "ciclosParaES": 1, "duracionES": 30},
+    {"nombre": "B_E/S", "computador": 1, "tipo": "IO_BOUND", "prioridad": 1,
+      "memoria": 16, "instrucciones": 50, "deadline": 5000, "ciclosParaES": 1, "duracionES": 2000},
+    {"nombre": "C_CPU", "computador": 1, "tipo": "CPU_BOUND", "prioridad": 1,
+      "memoria": 16, "instrucciones": 5, "deadline": 5000}
+  ]
+}

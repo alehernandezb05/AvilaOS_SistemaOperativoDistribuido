@@ -5,6 +5,7 @@ import edu.unimet.avilaos.cluster.Simulador;
 import edu.unimet.avilaos.hardware.CPU;
 import edu.unimet.avilaos.so.Buffer;
 import edu.unimet.avilaos.so.EstadoProceso;
+import edu.unimet.avilaos.so.MotivoTerminacion;
 import edu.unimet.avilaos.so.PCB;
 
 public final class CalculadorMetricas {
@@ -47,18 +48,25 @@ public final class CalculadorMetricas {
     public static ResumenMetricas deComputador(Computador computador, long ciclo) {
         CPU cpu = computador.getCpu();
         return calcular("Computador " + computador.getId(), procesosDe(computador), ciclo,
-                cpu.getCiclosOcupada(), cpu.getCiclosTotales());
+                cpu.getCiclosOcupada(), cpu.getCiclosTotales(),
+                computador.getNucleo().getSuspensionesCompletadas(),
+                computador.getNucleo().getReactivacionesCompletadas());
     }
 
     public static ResumenMetricas delSistema(Simulador simulador, PCB[] todos, long ciclo) {
         long ocupada = 0;
         long totales = 0;
+        long suspensiones = 0;
+        long reactivaciones = 0;
         for (int i = 1; i <= simulador.getCantidadComputadores(); i++) {
-            CPU cpu = simulador.getComputador(i).getCpu();
+            Computador computador = simulador.getComputador(i);
+            CPU cpu = computador.getCpu();
+            suspensiones += computador.getNucleo().getSuspensionesCompletadas();
+            reactivaciones += computador.getNucleo().getReactivacionesCompletadas();
             ocupada += cpu.getCiclosOcupada();
             totales += cpu.getCiclosTotales();
         }
-        return calcular("Sistema", todos, ciclo, ocupada, totales);
+        return calcular("Sistema", todos, ciclo, ocupada, totales, suspensiones, reactivaciones);
     }
 
     public static ResumenBuffer deBuffer(Buffer buffer, PCB[] todos) {
@@ -88,9 +96,11 @@ public final class CalculadorMetricas {
     }
 
     private static ResumenMetricas calcular(String nombre, PCB[] procesos, long ciclo,
-                                            long ocupada, long totales) {
+                                            long ocupada, long totales,
+                                            long suspensiones, long reactivaciones) {
         int terminados = 0;
         int completados = 0;
+        int vencidos = 0;
         long sumaRespuesta = 0;
         int conRespuesta = 0;
         double sumaX = 0;
@@ -102,6 +112,8 @@ public final class CalculadorMetricas {
                 terminados++;
                 if (p.cumplioDeadline()) {
                     completados++;
+                } else if (p.getMotivoTerminacion() == MotivoTerminacion.DEADLINE_VENCIDO) {
+                    vencidos++;
                 }
             }
             if (p.getCicloPrimeraEjecucion() >= 0) {
@@ -122,10 +134,11 @@ public final class CalculadorMetricas {
         double throughput = ciclo > 0 ? (double) completados / ciclo : 0;
         double utilizacion = totales > 0 ? 100.0 * ocupada / totales : 0;
         double respuesta = conRespuesta > 0 ? (double) sumaRespuesta / conRespuesta : Double.NaN;
-        double cumplimiento = terminados > 0 ? 100.0 * completados / terminados : Double.NaN;
+        int conResultadoDePlazo = completados + vencidos;
+        double cumplimiento = conResultadoDePlazo > 0 ? 100.0 * completados / conResultadoDePlazo : Double.NaN;
         double equidad = (n > 0 && sumaX2 > 0) ? (sumaX * sumaX) / (n * sumaX2) : Double.NaN;
         return new ResumenMetricas(nombre, terminados, completados, throughput, utilizacion,
-                respuesta, cumplimiento, equidad);
+                respuesta, cumplimiento, equidad, suspensiones, reactivaciones);
     }
 
     private static boolean contiene(PCB[] procesos, PCB buscado) {
