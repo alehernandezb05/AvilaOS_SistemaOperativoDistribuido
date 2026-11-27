@@ -38,7 +38,6 @@ final class DialogoCrearEntrada {
                         indice, seleccionado, foco);
             }
         });
-        tipo.addActionListener(e -> bloques.setEnabled(tipo.getSelectedItem() == Tipo.FILE));
         JTextField duenio = new JTextField(solicitante, 20);
         JComboBox<Permiso> permiso = new JComboBox<>(new Permiso[] {Permiso.PRIVATE, Permiso.PUBLIC});
         permiso.setRenderer(new DefaultListCellRenderer() {
@@ -49,6 +48,12 @@ final class DialogoCrearEntrada {
                         indice, seleccionado, foco);
             }
         });
+        // El permiso solo controla la lectura de archivos: en un directorio no tendría efecto.
+        tipo.addActionListener(e -> {
+            boolean archivo = tipo.getSelectedItem() == Tipo.FILE;
+            bloques.setEnabled(archivo);
+            permiso.setEnabled(archivo);
+        });
         campos.add(new JLabel("Directorio destino"));
         campos.add(new JLabel(directorio));
         campos.add(new JLabel("Nombre"));
@@ -57,8 +62,10 @@ final class DialogoCrearEntrada {
         campos.add(tipo);
         campos.add(new JLabel("Tamaño en bloques (1–" + maxBloques + ")"));
         campos.add(bloques);
-        campos.add(new JLabel("Dueño"));
-        campos.add(permitirDirectorio ? duenio : new JLabel(solicitante));
+        if (permitirDirectorio) {
+            campos.add(new JLabel("Dueño"));
+            campos.add(duenio);
+        }
         campos.add(new JLabel("Permiso"));
         campos.add(permiso);
         campos.add(new JLabel("Solicitante"));
@@ -75,7 +82,7 @@ final class DialogoCrearEntrada {
                 return new OperacionArchivo(DiskOperation.CREATE,
                         SistemaArchivos.rutaHija(directorio, nombre.getText().strip()),
                         solicitante, cantidad, null, permitirDirectorio ? duenio.getText() : solicitante,
-                        (Permiso) permiso.getSelectedItem());
+                        cantidad > 0 ? (Permiso) permiso.getSelectedItem() : null);
             } catch (ParseException e) {
                 mostrarError(padre, "El tamaño debe ser un entero entre 1 y " + maxBloques + ".");
             } catch (IllegalArgumentException e) {

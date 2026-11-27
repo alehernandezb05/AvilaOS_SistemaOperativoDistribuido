@@ -34,7 +34,7 @@ public record OperacionArchivo(DiskOperation tipo, String ruta, String solicitan
             }
         }
         if ((duenio != null || permiso != null) && tipo != DiskOperation.CREATE) {
-            throw new IllegalArgumentException("Dueño y permiso solo se indican al crear.");
+            throw new IllegalArgumentException("Dueño y permiso (owner, permissions) solo se indican al crear.");
         }
     }
 
