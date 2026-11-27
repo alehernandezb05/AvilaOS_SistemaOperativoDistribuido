@@ -32,6 +32,7 @@ public class DiskScheduler implements ComponenteReloj {
     private DiskPolicy selectedPolicy;
     private int blockIndex;
     private int sweepReturnTarget = -1;
+    private DiskPolicy returnPolicy;
     private long totalHeadMovement;
     private long totalRequestsServed;
     private long totalWaitCycles;
@@ -216,6 +217,7 @@ waitByPolicy[selectedPolicy.ordinal()] += waitCycles;
         if (currentHead != sweep.targetBlock()) return;
         if (sweep.returnBlock() >= 0) {
             sweepReturnTarget = sweep.returnBlock();
+            returnPolicy = activePolicy.getPolicy();
             registrarEvento("El disco llega al extremo " + currentHead + " y regresa al bloque " + sweepReturnTarget
                     + " sin atender solicitudes (" + activePolicy.getPolicy() + ")");
             if (alreadyAtTarget) advanceSweepReturn();
@@ -236,8 +238,10 @@ waitByPolicy[selectedPolicy.ordinal()] += waitCycles;
     }
 
     if (currentHead == sweepReturnTarget) {
-        registrarEvento("El disco termina el retorno en el bloque " + currentHead + " (" + activePolicy.getPolicy() + ")");
+        registrarEvento("El disco termina el retorno en el bloque " + currentHead + " (" + returnPolicy + ")");
         sweepReturnTarget = -1;
+        // El barrido circular siempre sigue hacia los bloques mayores.
+        currentDirection = DiskDirection.UP;
     }
 }
 
@@ -378,7 +382,13 @@ waitByPolicy[selectedPolicy.ordinal()] += waitCycles;
         }
 
         movementHistory[movementHistorySize++] =
-                new MovementSample(currentCycle, totalHeadMovement, activePolicy.getPolicy());
+                new MovementSample(currentCycle, totalHeadMovement, policyMovingHead());
+    }
+
+    /** El tramo lo mueve la política que eligió la solicitud en curso o empezó el retorno, no la recién elegida. */
+    private DiskPolicy policyMovingHead() {
+        if (sweepReturnTarget >= 0) return returnPolicy;
+        return currentRequest != null ? selectedPolicy : activePolicy.getPolicy();
     }
 
     public MovementSample[] getMovementHistory(int fromIndex) {

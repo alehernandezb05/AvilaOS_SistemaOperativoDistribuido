@@ -200,7 +200,9 @@ public final class PruebaDisco {
         for (int i = 0; i < returnPositions.length; i++) {
             disk.alCiclo(3 + i);
             DiskSnapshot state = disk.getSnapshot();
-            comprobar(state.currentHead() == returnPositions[i] && state.direction() == DiskDirection.DOWN
+            // Baja mientras regresa; al llegar al 0 el barrido circular vuelve a subir.
+            DiskDirection esperada = i == returnPositions.length - 1 ? DiskDirection.UP : DiskDirection.DOWN;
+            comprobar(state.currentHead() == returnPositions[i] && state.direction() == esperada
                     && state.totalHeadMovement() == 4 && state.activeRequestId() == -1
                     && state.totalRequestsServed() == 0 && disk.pollCompleted() == null,
                     "El retorno mueve el cabezal sin sumar desplazamiento ni atender solicitudes.");

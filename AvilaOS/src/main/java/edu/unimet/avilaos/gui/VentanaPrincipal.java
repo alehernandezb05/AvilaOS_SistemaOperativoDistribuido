@@ -251,6 +251,7 @@ public class VentanaPrincipal extends JFrame {
     @Override
     public void dispose() {
         refresco.stop();
+        panelDisco.desconectar();
         super.dispose();
     }
 

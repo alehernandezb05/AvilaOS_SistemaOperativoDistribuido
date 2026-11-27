@@ -40,6 +40,10 @@ public class PanelDisco extends JPanel {
     private int muestrasGraficadas = 0;
     private long cicloAnterior = -1;
     private long desplazamientoAnterior;
+    private DiskPolicy politicaAnterior;
+    private String serieActual;
+    // Veces que cada política ya tuvo un tramo en esta ejecución.
+    private final int[] tramos = new int[DiskPolicy.values().length];
     private final ModeloCola cola = new ModeloCola();
     private final JComboBox<DiskPolicy> comboPolitica = new JComboBox<>(DiskPolicy.values());
     private final JSpinner spnVelocidad;
@@ -101,6 +105,8 @@ SwingUtilities.invokeLater(
 SwingUtilities.invokeLater(() -> contenido.setDividerLocation(0.6));
     }
 
+    void desconectar() { grafica.desconectar(); }
+
     /** Avisa cuando el usuario elige otra politica de disco. */
     /** Solo el administrador cambia la politica y la velocidad del disco. */
     void setControlesEditables(boolean editables) {
@@ -159,7 +165,12 @@ SwingUtilities.invokeLater(() -> contenido.setDividerLocation(0.6));
             cola.mostrar(vista.entries());
             mapa.mostrar(bloques, estado);
             for (DiskScheduler.MovementSample muestra : nuevasMuestras) {
-                comparacion.agregar(ejecucion, muestra.cycle(), muestra.movement(), muestra.policy(),
+                if (muestra.policy() != politicaAnterior) {
+                    politicaAnterior = muestra.policy();
+                    serieActual = ComparacionDisco.nombre(ejecucion, politicaAnterior,
+                            ++tramos[politicaAnterior.ordinal()]);
+                }
+                comparacion.agregar(serieActual, muestra.cycle(), muestra.movement(),
                         cicloAnterior, desplazamientoAnterior);
                 cicloAnterior = muestra.cycle();
                 desplazamientoAnterior = muestra.movement();

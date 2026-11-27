@@ -14,10 +14,12 @@ import org.jfree.chart.plot.PlotOrientation;
 /** Gráfica del desplazamiento acumulado: una curva por ejecución y política, para compararlas. */
 public class DiskChartPanel extends JPanel {
 
+    private final JFreeChart chart;
+
     public DiskChartPanel(ComparacionDisco comparacion) {
         setLayout(new BorderLayout());
 
-        JFreeChart chart = ChartFactory.createXYLineChart(
+        chart = ChartFactory.createXYLineChart(
                 "Desplazamiento acumulado del cabezal",
                 "Ciclos de reloj",
                 "Desplazamiento (bloques)",
@@ -36,4 +38,7 @@ public class DiskChartPanel extends JPanel {
         pie.add(limpiar);
         add(pie, BorderLayout.SOUTH);
     }
+
+    /** Suelta las curvas compartidas para que una ventana cerrada no quede enganchada a ellas. */
+    void desconectar() { chart.getXYPlot().setDataset(null); }
 }

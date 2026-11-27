@@ -14,8 +14,11 @@ import java.awt.Graphics;
 import java.awt.Graphics2D;
 import java.awt.Rectangle;
 import java.awt.RenderingHints;
+import java.awt.event.ComponentAdapter;
+import java.awt.event.ComponentEvent;
 import java.awt.event.MouseEvent;
 import javax.swing.JPanel;
+import javax.swing.JViewport;
 import javax.swing.Scrollable;
 
 /**
@@ -46,6 +49,18 @@ public class DiskMapPanel extends JPanel implements Scrollable {
         this.diskScheduler = diskScheduler;
         setBackground(Color.WHITE);
         setToolTipText("");
+        // Al cambiar el ancho cambian las columnas, y con ellas el alto que necesita el mapa.
+        addComponentListener(new ComponentAdapter() {
+            private int columnasPrevias;
+            @Override
+            public void componentResized(ComponentEvent e) {
+                int columnas = columns();
+                if (columnas != columnasPrevias) {
+                    columnasPrevias = columnas;
+                    revalidate();
+                }
+            }
+        });
     }
 
     private record ColorAsignado(String ruta, Color color) { }
@@ -192,17 +207,22 @@ public class DiskMapPanel extends JPanel implements Scrollable {
         return "Bloque " + position + " — " + content;
     }
 
+    /** Ancho donde se dibuja: el del visor si está en un JScrollPane, para no calcular filas con un ancho viejo. */
+    private int anchoDisponible() {
+        int ancho = getParent() instanceof JViewport visor ? visor.getWidth() : getWidth();
+        return ancho > 0 ? ancho : 20 * BLOCK_STEP + START_X;
+    }
+
     private int columns() {
-        return Math.max(1, (getWidth() - START_X) / BLOCK_STEP);
+        return Math.max(1, (anchoDisponible() - START_X) / BLOCK_STEP);
     }
 
     /** El ancho lo pone el panel que lo contiene; el alto crece con las filas necesarias. */
     @Override
     public Dimension getPreferredSize() {
-        int ancho = Math.max(getWidth(), 20 * BLOCK_STEP + START_X);
-        int columnas = Math.max(1, (ancho - START_X) / BLOCK_STEP);
+        int columnas = columns();
         int filas = (bloquesVisibles().length + columnas - 1) / columnas;
-        return new Dimension(ancho, START_Y + filas * BLOCK_STEP + 10);
+        return new Dimension(anchoDisponible(), START_Y + filas * BLOCK_STEP + 10);
     }
 
     @Override public Dimension getPreferredScrollableViewportSize() { return new Dimension(600, 250); }

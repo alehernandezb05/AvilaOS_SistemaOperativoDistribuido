@@ -19,9 +19,12 @@ public final class ComparacionDisco {
     /** Número de la ejecución que empieza; numera las series de esa simulación. */
     int nuevaEjecucion() { return ++ejecuciones; }
 
-    void agregar(int ejecucion, long ciclo, long desplazamiento, DiskPolicy politica,
-                 long cicloAnterior, long desplazamientoAnterior) {
-        String nombre = "Ejecución " + ejecucion + " - " + politica;
+    /** Nombre de la serie: volver a una política dentro de la misma ejecución abre otro tramo. */
+    static String nombre(int ejecucion, DiskPolicy politica, int tramo) {
+        return "Ejecución " + ejecucion + " - " + politica + (tramo > 1 ? " (" + tramo + ")" : "");
+    }
+
+    void agregar(String nombre, long ciclo, long desplazamiento, long cicloAnterior, long desplazamientoAnterior) {
         int indice = datos.getSeriesIndex(nombre);
         if (indice == -1) {
             XYSeries serie = new XYSeries(nombre, true, false);
