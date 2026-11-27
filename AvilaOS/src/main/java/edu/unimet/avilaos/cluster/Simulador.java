@@ -172,7 +172,8 @@ public class Simulador implements ServicioCluster {
     }
 
     public SistemaArchivos copiaSistemaArchivos() {
-        return observar(() -> sistemaArchivos == null ? null : sistemaArchivos.copia());
+        // El cabezal también es parte del estado del disco que se conserva al guardar o recargar procesos.
+        return observar(() -> sistemaArchivos == null ? null : sistemaArchivos.copia(getDisco().getCurrentHead()));
     }
 
     public void agregarProceso(PCB proceso) {
@@ -402,6 +403,20 @@ public class Simulador implements ServicioCluster {
     private void setVelocidadDiscoInterno(int velocidad) {
         exigirAdministrador("cambiar la velocidad del disco");
         getDisco().setSpeed(velocidad);
+    }
+
+    /** Retiene o suelta el disco; solo el administrador, igual que la política. */
+    public void setDiscoRetenido(boolean retenido) {
+        observar(() -> { setDiscoRetenidoInterno(retenido); return null; });
+    }
+
+    private void setDiscoRetenidoInterno(boolean retenido) {
+        exigirAdministrador(retenido ? "retener el disco" : "soltar el disco");
+        DiskScheduler disco = getDisco();
+        if (disco.isHeld() == retenido) return;
+        disco.setHeld(retenido);
+        log.registrar(getCicloActual(), retenido ? "Se retiene el disco: las solicitudes esperan en la cola"
+                : "Se suelta el disco con " + disco.getSnapshot().pendingCount() + " solicitudes en cola");
     }
 
     public Log getLog() { return log; }

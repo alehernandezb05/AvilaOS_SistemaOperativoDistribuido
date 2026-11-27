@@ -192,6 +192,16 @@ FIFO conserva el orden de llegada y SSTF elige el bloque mas cercano; ante
 un empate conserva el orden de llegada. Cambiar politica afecta la siguiente
 seleccion, sin interrumpir la solicitud activa.
 
+**Retener disco** (pestaña Disco, solo administrador) deja que las solicitudes
+se acumulen en la cola sin atenderlas; al soltarlo, la politica elige entre
+todas. Asi se ven en la ventana los casos P1-P4: cargar los dos JSON oficiales,
+marcar **Retener disco**, iniciar, esperar a que la cola tenga 8 solicitudes y
+desmarcarlo. Con FIFO conviene velocidad 2, porque a velocidad 1 el recorrido
+de 644 bloques no termina antes del deadline 500.
+
+Guardar el sistema de archivos, o cargar otros procesos sobre el disco actual,
+conserva la posicion actual del cabezal como `initialHead`.
+
 `DiskRequest` identifica proceso, operacion y bloques. Se envia una sola vez
 con `addRequest`; `pollCompleted` entrega cada resultado una vez, fuera del
 semaforo del motor. El resultado tambien queda consultable en la solicitud.

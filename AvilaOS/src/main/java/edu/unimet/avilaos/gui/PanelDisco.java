@@ -14,6 +14,7 @@ import java.awt.Font;
 import java.util.function.Consumer;
 import java.util.function.IntConsumer;
 import javax.swing.BorderFactory;
+import javax.swing.JCheckBox;
 import javax.swing.JComboBox;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
@@ -47,6 +48,7 @@ public class PanelDisco extends JPanel {
     private final ModeloCola cola = new ModeloCola();
     private final JComboBox<DiskPolicy> comboPolitica = new JComboBox<>(DiskPolicy.values());
     private final JSpinner spnVelocidad;
+    private final JCheckBox chkRetener = new JCheckBox("Retener disco");
     private final JLabel lblEstado = new JLabel();
     private final JLabel lblMetricas = new JLabel();
     // Evita que actualizar el combo desde el disco se tome como una eleccion del usuario
@@ -67,6 +69,8 @@ public class PanelDisco extends JPanel {
         controles.add(comboPolitica);
         controles.add(new JLabel("Velocidad (bloques por ciclo):"));
         controles.add(spnVelocidad);
+        chkRetener.setToolTipText("Las solicitudes se acumulan en la cola sin atenderse; al soltar, la política elige entre todas.");
+        controles.add(chkRetener);
         lblEstado.setFont(lblEstado.getFont().deriveFont(Font.PLAIN));
         JPanel cabecera = new JPanel(new BorderLayout(4, 4));
 
@@ -112,11 +116,18 @@ SwingUtilities.invokeLater(() -> contenido.setDividerLocation(0.6));
     void setControlesEditables(boolean editables) {
         comboPolitica.setEnabled(editables);
         spnVelocidad.setEnabled(editables);
+        chkRetener.setEnabled(editables);
     }
 
     void alCambiarPolitica(Consumer<DiskPolicy> accion) {
         comboPolitica.addActionListener(e -> {
             if (!sincronizando) accion.accept((DiskPolicy) comboPolitica.getSelectedItem());
+        });
+    }
+
+    void alRetener(Consumer<Boolean> accion) {
+        chkRetener.addActionListener(e -> {
+            if (!sincronizando) accion.accept(chkRetener.isSelected());
         });
     }
 
@@ -131,6 +142,7 @@ SwingUtilities.invokeLater(() -> contenido.setDividerLocation(0.6));
     Runnable capturar() {
         DiskQueueView vista = disco.getQueueView();
         DiskSnapshot estado = vista.state();
+        boolean retenido = disco.isHeld();
         var bloques = disco.getBlocks();
         DiskScheduler.MovementSample[] nuevasMuestras = disco.getMovementHistory(muestrasGraficadas);
         StringBuilder metricas = new StringBuilder("<html>");
@@ -151,6 +163,7 @@ SwingUtilities.invokeLater(() -> contenido.setDividerLocation(0.6));
                 if (comboPolitica.getSelectedItem() != estado.policy() && !comboPolitica.isPopupVisible()) {
                     comboPolitica.setSelectedItem(estado.policy());
                 }
+                if (chkRetener.isSelected() != retenido) chkRetener.setSelected(retenido);
                 if (!spnVelocidad.getValue().equals(estado.speed()) && !spnVelocidad.hasFocus()) {
                     spnVelocidad.setValue(estado.speed());
                 }
@@ -160,7 +173,7 @@ SwingUtilities.invokeLater(() -> contenido.setDividerLocation(0.6));
             lblEstado.setText("   Cabezal: " + estado.currentHead() + " [" + estado.direction() + "]"
                     + "   Desplazamiento: " + estado.totalHeadMovement()
                     + "   Atendidas: " + estado.totalRequestsServed()
-                    + "   En cola: " + estado.pendingCount());
+                    + "   En cola: " + estado.pendingCount() + (retenido ? "   (disco retenido)" : ""));
             lblMetricas.setText(textoMetricas);
             cola.mostrar(vista.entries());
             mapa.mostrar(bloques, estado);

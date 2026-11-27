@@ -12,6 +12,7 @@ import edu.unimet.avilaos.hardware.disco.enums.DiskPolicy;
 import edu.unimet.avilaos.so.MotivoTerminacion;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Arrays;
 import java.util.Locale;
 
 /** Validacion determinista: no usa temporizadores, frameworks ni colecciones Java. */
@@ -55,6 +56,8 @@ public final class PruebaCasosOficiales {
         System.out.println("COMPLETO: JSON oficiales sin alterar; llegadas escalonadas, velocidad 1.");
         for (DiskPolicy p : DiskPolicy.values()) completos[p.ordinal()] = completo(p, escenarios, salida);
         grafica(salida, "Completo", completos);
+        System.out.println("RETENIDO: JSON oficiales, disco retenido hasta tener las ocho solicitudes, velocidad 2.");
+        for (DiskPolicy p : DiskPolicy.values()) retenido(p, escenarios);
         Files.writeString(salida.resolve("resumen.csv"), resumen);
         System.out.println("OK: casos P1-P4, anexo, bordes y simulacion completa.");
         System.out.println("Evidencias: " + salida.toAbsolutePath().normalize());
@@ -166,6 +169,36 @@ public final class PruebaCasosOficiales {
         escribir("Completo",p,d,c,orden,recorrido,detalle,salida);
         System.out.printf("  procesos: %d completados, %d error E/S, %d deadline%n",completados,errores,vencidos);
         return new Serie(movimiento,c);
+    }
+
+    /** Con el disco retenido, las solicitudes de los JSON oficiales se juntan y salen en el orden de P1-P4. */
+    private static void retenido(DiskPolicy p, Path escenarios) throws Exception {
+        var config=ArchivoConfiguracion.cargar(escenarios.resolve("09_procesos_archivos.json"));
+        var archivos=ArchivoSistemaArchivos.cargar(escenarios.resolve("08_sistema_archivos.json"));
+        // Velocidad 2 para que FIFO termine antes del deadline 500; el orden no depende de la velocidad.
+        config.setDisco(new ConfigDisco(200,50,config.getDisco().getSwapSizeBlocks(),2,p));
+        Simulador s=new Simulador(config,archivos);
+        var comp=s.getComputador(1); DiskScheduler d=s.getDisco();
+        s.setDiscoRetenido(true);
+        int c=0;
+        while(d.getSnapshot().pendingCount()<8 && c<100) { d.alCiclo(++c); comp.getNucleo().alCiclo(c); comp.getCpu().alCiclo(c); }
+        exigir(d.getSnapshot().pendingCount()==8 && d.getTotalHeadMovement()==0,"Retenido, el disco no atiende ni se mueve");
+        DiskRequest[] cola=d.getPendingRequests();
+        s.setDiscoRetenido(false);
+        while(comp.getNucleo().getColas().cantidadTerminados()<8 && c<LIMITE) { d.alCiclo(++c); comp.getNucleo().alCiclo(c); comp.getCpu().alCiclo(c); }
+        int[] orden=new int[8];
+        for(int i=0;i<8;i++) {
+            int antes=0;
+            for(DiskRequest otra:cola) if(otra.getCompletionCycle()<cola[i].getCompletionCycle()) antes++;
+            exigir(cola[i].getCompletionCycle()>0,"Solicitud sin atender: "+cola[i].getProcessName());
+            orden[antes]=cola[i].getBlockNumber();
+        }
+        exigir(Arrays.equals(orden,ORDEN_CASOS[p.ordinal()]),"Orden retenido de "+p+": "+Arrays.toString(orden));
+        exigir(d.getTotalHeadMovement()==MOV_CASOS[p.ordinal()],"Desplazamiento retenido de "+p+": "+d.getTotalHeadMovement());
+        exigir(String.join("\n",s.getLog().obtenerDesde(0)).contains("Se suelta el disco con 8 solicitudes"),"El log registra la retención");
+        exigir(s.copiaSistemaArchivos().cabezalInicial()==d.getCurrentHead() && d.getCurrentHead()!=50,
+                "Guardar o recargar conserva la posición actual del cabezal");
+        System.out.println("  "+p+": "+Arrays.toString(orden)+" desplazamiento "+d.getTotalHeadMovement());
     }
 
     private static void bordes() {

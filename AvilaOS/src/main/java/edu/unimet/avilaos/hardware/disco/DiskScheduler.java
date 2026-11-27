@@ -33,6 +33,8 @@ public class DiskScheduler implements ComponenteReloj {
     private int blockIndex;
     private int sweepReturnTarget = -1;
     private DiskPolicy returnPolicy;
+    // Retenido, el disco termina lo que tiene en curso pero no elige solicitudes nuevas.
+    private boolean held;
     private long totalHeadMovement;
     private long totalRequestsServed;
     private long totalWaitCycles;
@@ -94,6 +96,28 @@ public class DiskScheduler implements ComponenteReloj {
         }
     }
 
+    /**
+     * Retener deja que las solicitudes se acumulen en la cola sin atenderlas; al soltar, la política elige entre
+     * todas. Sirve para ver el orden de una política con la cola completa, como en los casos de prueba.
+     */
+    public void setHeld(boolean held) {
+        mutex.acquireUninterruptibly();
+        try {
+            this.held = held;
+        } finally {
+            mutex.release();
+        }
+    }
+
+    public boolean isHeld() {
+        mutex.acquireUninterruptibly();
+        try {
+            return held;
+        } finally {
+            mutex.release();
+        }
+    }
+
     public void setSpeed(int speed) {
         validateSpeed(speed, getTotalBlocks());
         mutex.acquireUninterruptibly();
@@ -143,7 +167,7 @@ try {
                 return;
             }
             if (currentRequest == null) {
-                if (requestQueue.estaVacia()) return;
+                if (held || requestQueue.estaVacia()) return;
                 currentRequest = activePolicy.selectNextRequest(requestQueue, currentHead, currentDirection);
                 if (currentRequest == null) {
                     advanceSweep();

@@ -105,6 +105,14 @@ public class VentanaPrincipal extends JFrame {
             }
             actualizar();
         });
+        panelDisco.alRetener(retenido -> {
+            try {
+                simulador.setDiscoRetenido(retenido);
+            } catch (IllegalArgumentException e) {
+                error(e.getMessage());
+            }
+            actualizar();
+        });
         JTabbedPane vistas = new JTabbedPane();
         vistas.addTab("Computador", scrollComputadores);
         vistas.addTab("Disco", panelDisco);
