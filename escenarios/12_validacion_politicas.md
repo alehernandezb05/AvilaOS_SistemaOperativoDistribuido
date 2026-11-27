@@ -18,7 +18,7 @@ La prueba ejecutable utiliza el `DiskScheduler`, el núcleo y la CPU existentes,
 
 - Archivos originales `08_sistema_archivos.json` y `09_procesos_archivos.json` del enunciado: RAM 1024, CPU FCFS, quantum 0, swap 100, disco 200, cabezal 50, velocidad 1, ocho procesos. Se carga de nuevo el estado inicial para cada política y se cambia únicamente la política de disco.
 - Para reproducibilidad se avanza manualmente el ciclo global llamando disco, núcleo y CPU en ese orden (el mismo orden de registro del reloj). Esta prueba no sustituye las pruebas concurrentes del #93 ni la ejecución gráfica.
-- Los procesos generan llegadas escalonadas; las operaciones no son equivalentes al lote. El JSON original trae dos UPDATE sin `newName` ni solicitante administrador y un DELETE sin solicitante autorizado sobre un archivo privado. Se conserva la validación de permisos y campos: no se inventan datos para hacer pasar esas solicitudes. Se esperan cinco lecturas completadas y tres errores de E/S, sin deadlines vencidos en esta configuración. No se compara su orden con el del lote.
+- Los procesos generan llegadas escalonadas; las operaciones no son equivalentes al lote. Los procesos del JSON sin `requester` actúan como administrador, que es quien carga el archivo, y un UPDATE sin `newName` escribe sobre los bloques del archivo. Las ocho solicitudes llegan al disco y ninguna se rechaza. Con FIFO, el cabezal recorre tanto que tres procesos vencen el deadline de 500 ciclos (cinco completados); con SSTF, SCAN y C-SCAN se completan los ocho. No se compara su orden con el del lote.
 - Se registran terminaciones, ciclo de finalización y log del núcleo, además del recorrido y solicitudes del disco.
 
 ### Casos de borde

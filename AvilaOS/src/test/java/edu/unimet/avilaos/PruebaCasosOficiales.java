@@ -151,9 +151,11 @@ public final class PruebaCasosOficiales {
             else if(motivo==MotivoTerminacion.DEADLINE_VENCIDO) vencidos++;
             estados.append(pcb.getNombre()).append(',').append(motivo).append(',').append(pcb.getCicloFin()).append('\n');
         }
-        exigir(completados==5 && errores==3 && vencidos==0, "Resultados de los JSON oficiales inesperados");
+        // FIFO recorre 644 bloques: a velocidad 1 tres procesos vencen el deadline 500. Las demas atienden las ocho.
+        int esperados=p==DiskPolicy.FIFO?5:8;
+        exigir(completados==esperados && errores==0 && vencidos==8-esperados, "Resultados de los JSON oficiales inesperados");
         for(int i=0;i<cantidad;i++) if(!anotadas[i]) solicitud(detalle,solicitudes[i]);
-        exigir(atendidas==d.getTotalRequestsServed() && atendidas==5 && d.getServedCount(p)==atendidas,"Conteo de solicitudes inconsistente");
+        exigir(atendidas==d.getTotalRequestsServed() && atendidas==esperados && d.getServedCount(p)==atendidas,"Conteo de solicitudes inconsistente");
         exigir(d.getAverageWaitCycles()==(double)suma/atendidas,"Espera completa inconsistente");
         exigir(d.getSnapshot().pendingCount()==0 && d.getSnapshot().activeRequestId()==-1,"Cola residual");
         Files.writeString(salida.resolve("Completo_"+p+"_procesos.csv"),estados);

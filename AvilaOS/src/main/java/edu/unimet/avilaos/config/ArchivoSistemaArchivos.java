@@ -152,8 +152,17 @@ public final class ArchivoSistemaArchivos {
             throw new IllegalArgumentException("blocks debe estar entre 1 y " + bloquesDisco + " en " + ruta + ".");
         }
         JsonElement cadena = objeto.get("blockChain");
-        if (cadena == null && cantidad == 1) return new int[] {inicio};
-        if (cadena == null || !cadena.isJsonArray() || cadena.getAsJsonArray().size() != cantidad) {
+        if (cadena == null) {
+            // El formato del enunciado solo trae startBlock y blocks: la cadena ocupa bloques consecutivos.
+            if (inicio < 0 || inicio + cantidad > bloquesDisco) {
+                throw new IllegalArgumentException("Los " + cantidad + " bloques desde " + inicio + " no caben en el disco en "
+                        + ruta + "; indique blockChain.");
+            }
+            int[] consecutivos = new int[cantidad];
+            for (int i = 0; i < cantidad; i++) consecutivos[i] = inicio + i;
+            return consecutivos;
+        }
+        if (!cadena.isJsonArray() || cadena.getAsJsonArray().size() != cantidad) {
             throw new IllegalArgumentException("blockChain debe indicar las " + cantidad + " posiciones de " + ruta + ".");
         }
         int[] posiciones = new int[cantidad];

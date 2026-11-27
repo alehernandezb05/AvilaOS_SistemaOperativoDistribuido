@@ -62,7 +62,11 @@ final class PruebaSistemaArchivos {
             rechazar(temporal, archivo + "," + archivo + "," + directorios, "duplicada");
             rechazar(temporal, archivo + "," + archivo.replace("/a/b/datos", "/a/b/copia") + "," + directorios, "repetido");
             rechazar(temporal, archivo.replace("[6,3]", "[6,8]") + "," + directorios, "fuera de rango");
-            rechazar(temporal, archivo.replace(",\"blockChain\":[6,3]", "") + "," + directorios, "blockChain");
+            SistemaArchivos sinCadena = cargar(temporal, archivo.replace(",\"blockChain\":[6,3]", "") + "," + directorios);
+            comprobar(Arrays.equals(sinCadena.buscar("/a/b/datos").entrada().cadena(), new int[] {6, 7}),
+                    "Sin blockChain, como en el formato del enunciado, la cadena ocupa bloques consecutivos.");
+            rechazar(temporal, archivo.replace(",\"blockChain\":[6,3]", "").replace("\"startBlock\":6", "\"startBlock\":7")
+                    + "," + directorios, "blockChain");
             rechazar(temporal, archivo.replace("\"startBlock\":6", "\"startBlock\":\"6\"") + "," + directorios, "entero");
             rechazar(temporal, archivo.replace("\"public\"", "true") + "," + directorios, "permissions");
             rechazar(temporal, archivo + "," + archivo.replace("/a/b/datos", "/a/b/datos/hijo")

@@ -27,9 +27,10 @@ los datos de la entrada seleccionada y la tabla de asignación. El JSON aporta
 el tamaño del disco y el cabezal inicial. La configuración del computador
 aporta el tamaño de swap, que debe caber junto con los archivos.
 
-Para archivos de un bloque basta con `startBlock` y `blocks`. Los archivos
-de varios bloques incluyen también `blockChain`, un arreglo ordenado con
-todas las posiciones que empieza en `startBlock` y tiene `blocks` elementos.
+Basta con `startBlock` y `blocks`, como en el enunciado: sin más datos, la
+cadena ocupa `blocks` posiciones consecutivas desde `startBlock`. Una cadena
+fragmentada se indica con `blockChain`, un arreglo ordenado con todas las
+posiciones que empieza en `startBlock` y tiene `blocks` elementos.
 
 Para crear una lectura, selecciona un archivo y pulsa **Crear proceso READ…**.
 La primera instrucción consume un ciclo de CPU en modo sistema operativo.
@@ -38,16 +39,23 @@ Después el proceso espera a que el disco termine la cadena y vuelve a Listo.
 El JSON de procesos asigna el computador 1 y el tipo `IO_BOUND`. Si se omiten,
 `priority` vale 1, `quantum` vale 3, `headSpeed` vale 1 y `fileSizeBlocks`
 vale 0. `requester` es la identidad del usuario dentro de la simulación.
-Si se omite, la lectura se limita a archivos públicos. Para leer un archivo
-privado, el solicitante debe coincidir con su dueño.
-El ejemplo ejecuta cinco lecturas y registra tres errores de E/S: los dos
-`UPDATE` no traen `newName` ni `requester` y el `DELETE` no trae `requester`.
+Solo el administrador carga este archivo, así que si se omite el proceso actúa
+como `admin`. Con otro `requester`, para leer un archivo privado el solicitante
+debe coincidir con su dueño.
+El ejemplo atiende sus ocho solicitudes: cinco lecturas, dos escrituras (`UPDATE`
+sin `newName`) y un borrado. Con FIFO y velocidad 1 el cabezal recorre tanto que
+tres procesos vencen el deadline de 500 ciclos; con SSTF, SCAN y C-SCAN terminan
+los ocho.
 
 Selecciona un directorio y pulsa **Crear archivo o directorio…** para encolar
 un proceso CREATE. El árbol, la tabla y el mapa muestran el cambio al terminar
 la E/S. Se registra el PCB creador y la entrada nace privada. En esta simulación
 `admin` puede crear en cualquier directorio. Los demás solicitantes solo
 pueden crear archivos en sus propios directorios.
+
+`UPDATE` sin `newName` escribe sobre el archivo: el disco recorre su cadena
+igual que en una lectura y la estructura no cambia. Lo pueden pedir `admin` o
+el dueño del archivo.
 
 Selecciona una entrada y pulsa **Renombrar…** o **Eliminar…** para encolar un
 proceso UPDATE o DELETE. La interfaz solo crea el proceso: el árbol, la tabla y
@@ -63,11 +71,10 @@ un nombre destino ausente, igual al actual o que ya existe, un solicitante sin
 permiso, una entrada que no existe o ya fue eliminada, la raíz y una entrada
 que tiene otra operación pendiente (también sus ancestros y descendientes).
 Un UPDATE o DELETE cuyo proceso vence antes de que el disco termine no se aplica.
-En el JSON, UPDATE requiere `newName` (solo el nombre, sin `/`) y `requester`;
-DELETE requiere `requester`.
+En el JSON, `newName` (solo el nombre, sin `/`) convierte el UPDATE en un
+renombrado.
 
-En el JSON, CREATE requiere `requester` para autorizar la ejecución y
-`fileSizeBlocks` para elegir qué crear. Un tamaño positivo indica un archivo
+En el JSON, CREATE usa `fileSizeBlocks` para elegir qué crear. Un tamaño positivo indica un archivo
 y 0 indica un directorio. El directorio usa un ciclo de metadatos en el disco
 y no ocupa bloques.
 
@@ -146,7 +153,7 @@ los permisos antes de crear el proceso y el sistema de archivos los vuelve a
 validar al ejecutarlo, asi que no se pueden eludir desde la interfaz ni con un
 cambio de modo posterior. Un rechazo muestra su motivo, queda en el registro,
 no crea el proceso y la simulacion sigue. Los procesos del JSON sin `requester`
-solo acceden a archivos publicos.
+actuan como `admin`, porque solo el administrador puede cargar ese archivo.
 
 ## Guardar y recargar el sistema de archivos
 
@@ -162,7 +169,7 @@ cadenas de más de un bloque:
 ```
 
 `blockChain` debe empezar en `startBlock` y tener `blocks` posiciones; sin él,
-un archivo de un bloque se lee igual que en el ejemplo. Al cargar se rechazan
+la cadena son los bloques consecutivos desde `startBlock`. Al cargar se rechazan
 bloques repetidos (ciclos o doble asignación), posiciones fuera del disco,
 tamaños que no coinciden y padres inexistentes. Si los archivos no dejan
 espacio para el swap, la simulación no se crea y se explica el motivo.
