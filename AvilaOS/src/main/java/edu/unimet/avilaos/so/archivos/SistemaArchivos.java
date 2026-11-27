@@ -216,16 +216,15 @@ public final class SistemaArchivos {
                             + " pendiente sobre " + cambio.ruta + ".");
                 }
             }
-            String solicitante = operacion.solicitante();
             boolean directorio = operacion.bloques() == 0;
-            validarPermisoCreacion(solicitante, directorio, padre.entrada);
+            validarPermisoCreacion(operacion, padre.entrada);
             FileReservation reserva = directorio ? null : disco.reserveFile(ruta, operacion.bloques());
             try {
                 int[] cadena = directorio ? new int[0] : reserva.blockNumbers();
                 DiskRequest solicitud = directorio ? DiskRequest.metadata(procesoId, proceso, DiskOperation.CREATE)
                         : new DiskRequest(procesoId, proceso, DiskOperation.CREATE, cadena);
                 Entrada entrada = new Entrada(ruta, directorio ? Tipo.DIRECTORY : Tipo.FILE,
-                        solicitante, Permiso.PRIVATE, cadena, procesoId);
+                        operacion.duenioEfectivo(), operacion.permisoEfectivo(), cadena, procesoId);
                 pendientes.agregar(new Creacion(solicitud.getId(), entrada, reserva));
                 return solicitud;
             } catch (IllegalArgumentException e) {
@@ -252,7 +251,7 @@ public final class SistemaArchivos {
                     if (padre == null || padre.entrada.tipo() != Tipo.DIRECTORY) {
                         throw new IllegalArgumentException("El directorio destino no existe: " + rutaPadre(operacion.ruta()));
                     }
-                    validarPermisoCreacion(solicitante, operacion.bloques() == 0, padre.entrada);
+                    validarPermisoCreacion(operacion, padre.entrada);
                 }
                 case UPDATE -> {
                     if (operacion.nuevoNombre() == null) {
@@ -273,11 +272,17 @@ public final class SistemaArchivos {
         }
     }
 
-    private static void validarPermisoCreacion(String solicitante, boolean directorio, Entrada padre) {
+    /** El administrador crea en cualquier parte y puede asignar otro dueño; un usuario, solo archivos suyos en su directorio. */
+    private static void validarPermisoCreacion(OperacionArchivo operacion, Entrada padre) {
+        String solicitante = operacion.solicitante();
         if (ADMINISTRADOR.equals(solicitante)) return;
+        boolean directorio = operacion.bloques() == 0;
         if (solicitante == null || directorio || !padre.duenio().equals(solicitante)) {
             throw new IllegalArgumentException(directorio ? "Crear directorios requiere administrador."
                     : "CREATE requiere administrador o ser dueño del directorio destino.");
+        }
+        if (!solicitante.equals(operacion.duenioEfectivo())) {
+            throw new IllegalArgumentException("Solo el administrador puede asignar otro dueño.");
         }
     }
 

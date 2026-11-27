@@ -75,10 +75,21 @@ final class ArchivoProcesos {
                 solicitante == null ? SistemaArchivos.ADMINISTRADOR : solicitante, tipo == DiskOperation.CREATE
                         ? entero(entrada.get("fileSizeBlocks"), "fileSizeBlocks")
                         : enteroOpcional(entrada, "fileSizeBlocks", 0),
-                textoOpcional(entrada, "newName"));
+                textoOpcional(entrada, "newName"), textoOpcional(entrada, "owner"), permiso(entrada));
         return ConfigProceso.deArchivo(texto(entrada, "name"), enteroOpcional(entrada, "priority", 1),
                 entero(entrada.get("memory"), "memory"), entero(entrada.get("instructions"), "instructions"),
                 entero(entrada.get("deadline"), "deadline"), operacion);
+    }
+
+    /** Permiso opcional de un CREATE; sin él, la entrada nace privada. */
+    private static SistemaArchivos.Permiso permiso(JsonObject entrada) {
+        String valor = textoOpcional(entrada, "permissions");
+        if (valor == null) return null;
+        return switch (valor) {
+            case "public" -> SistemaArchivos.Permiso.PUBLIC;
+            case "private" -> SistemaArchivos.Permiso.PRIVATE;
+            default -> throw new IllegalArgumentException("permissions debe ser public o private.");
+        };
     }
 
     private static int enteroOpcional(JsonObject objeto, String campo, int porDefecto) {

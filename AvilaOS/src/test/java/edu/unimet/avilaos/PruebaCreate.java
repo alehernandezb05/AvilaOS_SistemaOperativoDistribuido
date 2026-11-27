@@ -45,6 +45,9 @@ final class PruebaCreate {
             rechazosYReserva(simulador(archivo));
             vencimiento(simulador(archivo));
 
+            Files.writeString(archivo, CONFIG.formatted(""));
+            directorioDeUsuario(simulador(archivo));
+
             Files.writeString(archivo, CONFIG.formatted(crear.replace(",\"fileSizeBlocks\":3", "")));
             try {
                 ArchivoConfiguracion.cargar(archivo);
@@ -134,6 +137,43 @@ final class PruebaCreate {
         for (int ciclo = 25; ciclo <= 60; ciclo++) avanzar(sim, ciclo);
         verificar(siguiente.getMotivoTerminacion() == MotivoTerminacion.COMPLETADO,
                 "Se deben recuperar los bloques reservados tras drenar la solicitud vencida.");
+    }
+
+    /** El admin da a un usuario su directorio; el usuario crea ahí con el permiso que elija, siempre a su nombre. */
+    private static void directorioDeUsuario(Simulador sim) {
+        SistemaArchivos sistema = sim.getSistemaArchivos();
+        PCB carpeta = crearCon("/bob", "admin", 0, "bob", Permiso.PUBLIC);
+        sim.agregarProceso(carpeta);
+        for (int ciclo = 1; ciclo <= 10; ciclo++) avanzar(sim, ciclo);
+        Entrada creada = sistema.buscar("/bob").entrada();
+        verificar(carpeta.getMotivoTerminacion() == MotivoTerminacion.COMPLETADO
+                && creada.duenio().equals("bob") && creada.permiso() == Permiso.PUBLIC,
+                "El administrador crea el directorio de bob con dueño y permiso elegidos.");
+
+        PCB publico = crearCon("/bob/notas", "bob", 1, null, Permiso.PUBLIC);
+        PCB ajeno = crearCon("/bob/regalo", "bob", 1, "ana", null);
+        sim.agregarProceso(publico);
+        sim.agregarProceso(ajeno);
+        for (int ciclo = 11; ciclo <= 40; ciclo++) avanzar(sim, ciclo);
+        Entrada notas = sistema.buscar("/bob/notas").entrada();
+        verificar(publico.getMotivoTerminacion() == MotivoTerminacion.COMPLETADO
+                && notas.duenio().equals("bob") && notas.permiso() == Permiso.PUBLIC,
+                "bob crea un archivo público en su propio directorio.");
+        verificar(ajeno.getMotivoTerminacion() == MotivoTerminacion.ERROR_ES && sistema.buscar("/bob/regalo") == null
+                && String.join("\n", sim.getLog().obtenerDesde(0)).contains("Solo el administrador puede asignar otro dueño"),
+                "Un usuario no puede crear archivos a nombre de otro.");
+        sistema.archivoParaLectura("/bob/notas", "ana");
+        try {
+            new OperacionArchivo(DiskOperation.READ, "/bob/notas", "ana", 0, null, null, Permiso.PUBLIC);
+            throw new AssertionError("Dueño y permiso solo aplican a CREATE.");
+        } catch (IllegalArgumentException esperado) {
+            verificar(esperado.getMessage().contains("solo se indican al crear"), "Debe explicar el campo sobrante.");
+        }
+    }
+
+    private static PCB crearCon(String ruta, String solicitante, int bloques, String duenio, Permiso permiso) {
+        return new PCB("Crear", 1, TipoProceso.IO_BOUND, 1, 1, 1, 100, 0,
+                new OperacionArchivo(DiskOperation.CREATE, ruta, solicitante, bloques, null, duenio, permiso));
     }
 
     private static PCB crear(String ruta, String solicitante, int bloques, int plazo) {
