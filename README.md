@@ -227,10 +227,8 @@ sus parametros iniciales se puede agregar este objeto a la configuracion:
 
 El disco admite entre 1 y 500 bloques; el cabezal usa indices desde cero y
 la velocidad se expresa en posiciones por ciclo (1 hasta el total de bloques).
-`swapSizeBlocks` conserva el parametro de la reserva futura; la asignacion
-de bloques y el swap se implementan en sus propias tareas. Guardar esta
-configuracion conserva el cabezal inicial, sin guardar el estado de una
-simulacion en curso.
+Guardar esta configuracion conserva el cabezal inicial, sin guardar el estado
+de una simulacion en curso.
 
 Para probar solo el disco: `./verificar.sh disco`.
 
