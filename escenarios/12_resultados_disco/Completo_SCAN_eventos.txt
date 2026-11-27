@@ -48,6 +48,7 @@
 [ciclo 136] Computador 1 termina la solicitud 88 READ /usuarios/video.mp4 de P18 (Proc_180) (bloqueado -> listo)
 [ciclo 137] Computador 1 selecciona el proceso P18 (Proc_180)
 [ciclo 138] Computador 1 termina el proceso P18 (Proc_180) y libera 16 de RAM
+[ciclo 155] El disco llega al extremo 199 y cambia de UP a DOWN (SCAN)
 [ciclo 156] El disco atiende la solicitud 94 READ de P24 en el bloque 64 (SCAN)
 [ciclo 291] Computador 1 termina la solicitud 94 READ /sistema/core.dll de P24 (Proc_64) (bloqueado -> listo)
 [ciclo 292] El disco atiende la solicitud 93 READ de P23 en el bloque 62 (SCAN)

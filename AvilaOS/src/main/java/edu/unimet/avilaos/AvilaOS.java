@@ -7,6 +7,7 @@ package edu.unimet.avilaos;
 import edu.unimet.avilaos.cluster.Simulador;
 import edu.unimet.avilaos.config.Configuracion;
 import edu.unimet.avilaos.gui.DialogoConfiguracionInicial;
+import edu.unimet.avilaos.gui.ComparacionDisco;
 import edu.unimet.avilaos.gui.VentanaPrincipal;
 import javax.swing.SwingUtilities;
 import javax.swing.UIManager;
@@ -32,7 +33,7 @@ public class AvilaOS {
                 System.exit(0);
                 return;
             }
-            abrirSimulacion(new Simulador(config), null);
+            abrirSimulacion(new Simulador(config), null, new ComparacionDisco());
         });
     }
 
@@ -40,12 +41,12 @@ public class AvilaOS {
      * Crea el Simulador y su ventana. Al cargar otra configuracion desde la ventana,
      * se detiene esta simulacion, se cierra su ventana y se abre una nueva.
      */
-    private static void abrirSimulacion(Simulador simulador, String rutaSeleccionada) {
+    private static void abrirSimulacion(Simulador simulador, String rutaSeleccionada, ComparacionDisco comparacion) {
         VentanaPrincipal[] ventana = new VentanaPrincipal[1];
-        ventana[0] = new VentanaPrincipal(simulador, rutaSeleccionada, (nueva, seleccion) -> {
+        ventana[0] = new VentanaPrincipal(simulador, rutaSeleccionada, comparacion, (nueva, seleccion) -> {
             simulador.detener();
             ventana[0].dispose();
-            abrirSimulacion(nueva, seleccion);
+            abrirSimulacion(nueva, seleccion, comparacion);
         });
         ventana[0].setVisible(true);
     }

@@ -34,8 +34,12 @@ public class PanelDisco extends JPanel {
 
     private final DiskScheduler disco;
     private final DiskMapPanel mapa;
-    private final DiskChartPanel grafica = new DiskChartPanel();
-private int muestrasGraficadas = 0;
+    private final ComparacionDisco comparacion;
+    private final int ejecucion;
+    private final DiskChartPanel grafica;
+    private int muestrasGraficadas = 0;
+    private long cicloAnterior = -1;
+    private long desplazamientoAnterior;
     private final ModeloCola cola = new ModeloCola();
     private final JComboBox<DiskPolicy> comboPolitica = new JComboBox<>(DiskPolicy.values());
     private final JSpinner spnVelocidad;
@@ -44,9 +48,12 @@ private int muestrasGraficadas = 0;
     // Evita que actualizar el combo desde el disco se tome como una eleccion del usuario
     private boolean sincronizando;
 
-    PanelDisco(DiskScheduler disco) {
+    PanelDisco(DiskScheduler disco, ComparacionDisco comparacion) {
         super(new BorderLayout(6, 6));
         this.disco = disco;
+        this.comparacion = comparacion;
+        ejecucion = comparacion.nuevaEjecucion();
+        grafica = new DiskChartPanel(comparacion);
         DiskSnapshot inicial = disco.getSnapshot();
         spnVelocidad = new JSpinner(new SpinnerNumberModel(inicial.speed(), 1, disco.getTotalBlocks(), 1));
         comboPolitica.setSelectedItem(inicial.policy());
@@ -152,7 +159,10 @@ SwingUtilities.invokeLater(() -> contenido.setDividerLocation(0.6));
             cola.mostrar(vista.entries());
             mapa.mostrar(bloques, estado);
             for (DiskScheduler.MovementSample muestra : nuevasMuestras) {
-                grafica.addDataPoint(muestra.cycle(), muestra.movement(), "Desplazamiento acumulado");
+                comparacion.agregar(ejecucion, muestra.cycle(), muestra.movement(), muestra.policy(),
+                        cicloAnterior, desplazamientoAnterior);
+                cicloAnterior = muestra.cycle();
+                desplazamientoAnterior = muestra.movement();
             }
             muestrasGraficadas += nuevasMuestras.length;
         };
@@ -160,13 +170,12 @@ SwingUtilities.invokeLater(() -> contenido.setDividerLocation(0.6));
 
     private static JPanel leyenda() {
         JPanel leyenda = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 2));
-        leyenda.add(muestra(new Color(200, 230, 201), "Libre"));
-        leyenda.add(muestra(DiskMapPanel.COLOR_ARCHIVO, "Archivo"));
-        leyenda.add(muestra(new Color(225, 190, 231), "Swap disponible"));
-        leyenda.add(muestra(new Color(171, 117, 188), "Swap ocupado"));
-        leyenda.add(muestra(Color.ORANGE, "Cabezal"));
-        JLabel destino = new JLabel("Borde azul: destino");
-        leyenda.add(destino);
+        leyenda.add(muestra(DiskMapPanel.COLOR_LIBRE, "Libre"));
+        leyenda.add(new JLabel("Archivo: un color por archivo (ver tabla de asignación)"));
+        leyenda.add(muestra(DiskMapPanel.COLOR_SWAP_LIBRE, "Swap disponible"));
+        leyenda.add(muestra(DiskMapPanel.COLOR_SWAP_OCUPADO, "Swap ocupado (P = proceso suspendido)"));
+        leyenda.add(muestra(DiskMapPanel.COLOR_CABEZAL, "Borde rojo: cabezal"));
+        leyenda.add(muestra(DiskMapPanel.COLOR_DESTINO, "Borde azul: destino"));
         return leyenda;
     }
 
