@@ -7,7 +7,6 @@ import edu.unimet.avilaos.hardware.disco.DiskStorage;
 import edu.unimet.avilaos.hardware.disco.DiskStorage.FileReservation;
 import edu.unimet.avilaos.hardware.disco.DiskStorage.InitialFile;
 import edu.unimet.avilaos.hardware.disco.enums.DiskOperation;
-import java.util.Arrays;
 import java.util.concurrent.Semaphore;
 
 /** Jerarquía del sistema de archivos, independiente de Swing. */
@@ -192,6 +191,12 @@ public final class SistemaArchivos {
 
     /** Incorpora las entradas confirmadas al iniciar otra simulación. */
     public SistemaArchivos copia() { return new SistemaArchivos(bloquesDisco, cabezalInicial, vista); }
+
+    /** Copia que arranca con el cabezal donde quedó, para guardar o seguir con el disco tal como está. */
+    public SistemaArchivos copia(int cabezal) {
+        if (cabezal < 0 || cabezal >= bloquesDisco) throw new IllegalArgumentException("El cabezal está fuera del disco.");
+        return new SistemaArchivos(bloquesDisco, cabezal, vista);
+    }
 
     public DiskRequest prepararCreacion(OperacionArchivo operacion, int procesoId, String proceso,
                                                       DiskStorage disco) {
@@ -469,7 +474,8 @@ public final class SistemaArchivos {
             if (creacion.solicitud != solicitudId) continue;
             Vista siguiente = vista;
             if (confirmar) {
-                Entrada[] entradas = Arrays.copyOf(vista.entradas, vista.entradas.length + 1);
+                Entrada[] entradas = new Entrada[vista.entradas.length + 1];
+                System.arraycopy(vista.entradas, 0, entradas, 0, vista.entradas.length);
                 entradas[entradas.length - 1] = creacion.entrada;
                 siguiente = new Vista(bloquesDisco, entradas);
             }

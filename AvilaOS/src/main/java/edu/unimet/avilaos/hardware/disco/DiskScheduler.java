@@ -5,6 +5,7 @@ import edu.unimet.avilaos.estructuras.Lista;
 import edu.unimet.avilaos.hardware.ComponenteReloj;
 import edu.unimet.avilaos.hardware.disco.DiskStorage.InitialFile;
 import edu.unimet.avilaos.hardware.disco.enums.DiskDirection;
+import edu.unimet.avilaos.hardware.disco.enums.DiskOperation;
 import edu.unimet.avilaos.hardware.disco.enums.DiskPolicy;
 import edu.unimet.avilaos.hardware.disco.interfaces.IDiskSchedulerPolicy;
 import edu.unimet.avilaos.hardware.disco.interfaces.IDiskSchedulerPolicy.Sweep;
@@ -33,6 +34,8 @@ public class DiskScheduler implements ComponenteReloj {
     private int blockIndex;
     private int sweepReturnTarget = -1;
     private DiskPolicy returnPolicy;
+    // Retenido, el disco termina lo que tiene en curso y solo atiende swap; las operaciones de archivo esperan.
+    private boolean held;
     private long totalHeadMovement;
     private long totalRequestsServed;
     private long totalWaitCycles;
@@ -94,6 +97,28 @@ public class DiskScheduler implements ComponenteReloj {
         }
     }
 
+    /**
+     * Retener deja que las solicitudes se acumulen en la cola sin atenderlas; al soltar, la política elige entre
+     * todas. Sirve para ver el orden de una política con la cola completa, como en los casos de prueba.
+     */
+    public void setHeld(boolean held) {
+        mutex.acquireUninterruptibly();
+        try {
+            this.held = held;
+        } finally {
+            mutex.release();
+        }
+    }
+
+    public boolean isHeld() {
+        mutex.acquireUninterruptibly();
+        try {
+            return held;
+        } finally {
+            mutex.release();
+        }
+    }
+
     public void setSpeed(int speed) {
         validateSpeed(speed, getTotalBlocks());
         mutex.acquireUninterruptibly();
@@ -144,7 +169,9 @@ try {
             }
             if (currentRequest == null) {
                 if (requestQueue.estaVacia()) return;
-                currentRequest = activePolicy.selectNextRequest(requestQueue, currentHead, currentDirection);
+                currentRequest = held ? takeSwapRequest()
+                        : activePolicy.selectNextRequest(requestQueue, currentHead, currentDirection);
+                if (currentRequest == null && held) return;
                 if (currentRequest == null) {
                     advanceSweep();
                     return;
@@ -244,6 +271,18 @@ waitByPolicy[selectedPolicy.ordinal()] += waitCycles;
         currentDirection = DiskDirection.UP;
     }
 }
+
+    /** Retenido solo se atiende swap, en orden de llegada: suspender o reactivar no debe esperar al administrador. */
+    private DiskRequest takeSwapRequest() {
+        for (int i = 0; i < requestQueue.getTamano(); i++) {
+            DiskRequest request = requestQueue.obtener(i);
+            if (request.getOperation() == DiskOperation.SUSPEND || request.getOperation() == DiskOperation.REACTIVATE) {
+                requestQueue.remover(request);
+                return request;
+            }
+        }
+        return null;
+    }
 
     /** Las decisiones del disco van al mismo log de eventos que ve el usuario. */
     private void registrarEvento(String mensaje) {

@@ -172,7 +172,8 @@ public class Simulador implements ServicioCluster {
     }
 
     public SistemaArchivos copiaSistemaArchivos() {
-        return observar(() -> sistemaArchivos == null ? null : sistemaArchivos.copia());
+        // El cabezal también es parte del estado del disco que se conserva al guardar o recargar procesos.
+        return observar(() -> sistemaArchivos == null ? null : sistemaArchivos.copia(getDisco().getCurrentHead()));
     }
 
     public void agregarProceso(PCB proceso) {
@@ -229,6 +230,12 @@ public class Simulador implements ServicioCluster {
         if (nueva.equals(sesion)) return;
         sesion = nueva;
         log.registrar(getCicloActual(), "Cambia el modo de uso a " + nueva);
+        // Un usuario no puede soltar el disco: si quedó retenido, se suelta para que sus procesos avancen.
+        DiskScheduler disco = getDisco();
+        if (!nueva.esAdministrador() && disco != null && disco.isHeld()) {
+            disco.setHeld(false);
+            log.registrar(getCicloActual(), "Se suelta el disco al salir del modo administrador");
+        }
     }
 
     /** Las politicas y el quantum los gestiona el administrador; tambien se valida aqui, no solo en la interfaz. */
@@ -402,6 +409,20 @@ public class Simulador implements ServicioCluster {
     private void setVelocidadDiscoInterno(int velocidad) {
         exigirAdministrador("cambiar la velocidad del disco");
         getDisco().setSpeed(velocidad);
+    }
+
+    /** Retiene o suelta el disco; solo el administrador, igual que la política. */
+    public void setDiscoRetenido(boolean retenido) {
+        observar(() -> { setDiscoRetenidoInterno(retenido); return null; });
+    }
+
+    private void setDiscoRetenidoInterno(boolean retenido) {
+        exigirAdministrador(retenido ? "retener el disco" : "soltar el disco");
+        DiskScheduler disco = getDisco();
+        if (disco.isHeld() == retenido) return;
+        disco.setHeld(retenido);
+        log.registrar(getCicloActual(), retenido ? "Se retiene el disco: las solicitudes esperan en la cola"
+                : "Se suelta el disco con " + disco.getSnapshot().pendingCount() + " solicitudes en cola");
     }
 
     public Log getLog() { return log; }
